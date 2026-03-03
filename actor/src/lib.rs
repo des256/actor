@@ -24,3 +24,6 @@ pub use onnx::*;
 
 mod vad;
 pub use vad::*;
+
+mod asr;
+pub use asr::*;
