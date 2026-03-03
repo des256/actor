@@ -1,0 +1,5 @@
+- add ASR
+- add LLMs
+- add TTS
+- rebuild audio pipeline
+- clean up st7789.rs
