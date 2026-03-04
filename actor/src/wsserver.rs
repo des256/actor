@@ -19,9 +19,7 @@ pub struct WsServerListener<T> {
     rx: tokio_mpsc::Receiver<T>,
 }
 
-pub async fn create_wsserver<T: Codec + Send + 'static>(
-    addr: impl ToSocketAddrs,
-) -> (WsServerHandle, WsServerListener<T>) {
+pub async fn create_wsserver<T: Codec + Send + 'static>(addr: impl ToSocketAddrs) -> (WsServerHandle, WsServerListener<T>) {
     let listener = TcpListener::bind(addr).await.unwrap();
     let sinks: Arc<RwLock<HashMap<SocketAddr, SplitSink<WebSocketStream<TcpStream>, Message>>>> =
         Arc::new(RwLock::new(HashMap::new()));

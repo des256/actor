@@ -38,9 +38,7 @@ macro_rules! impl_numeric {
     }
 }
 
-impl_numeric!(
-    u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f32, f64
-);
+impl_numeric!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f32, f64);
 
 impl Codec for String {
     fn encode(&self, target: &mut [u8]) {

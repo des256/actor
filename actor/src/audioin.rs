@@ -10,18 +10,13 @@ use {
 
 const CHANNEL_CAPACITY: usize = 8;
 
-pub struct AudioInListener {
+pub struct Listener {
     input_rx: tokio_mpsc::Receiver<Vec<i16>>,
 }
 
-pub fn create_audioin(
-    sample_rate: usize,
-    chunk_size: usize,
-    device_name: Option<&str>,
-    boost: usize,
-) -> AudioInListener {
+pub fn create(sample_rate: usize, chunk_size: usize, device_name: Option<&str>, boost: usize) -> Listener {
     let (input_tx, input_rx) = tokio_mpsc::channel::<Vec<i16>>(CHANNEL_CAPACITY);
-    let listener = AudioInListener { input_rx };
+    let listener = Listener { input_rx };
     std::thread::spawn({
         let device_name = match device_name {
             Some(name) => Some(name.to_string()),
@@ -60,10 +55,7 @@ pub fn create_audioin(
                     Ok(()) => {
                         let mut sample = Vec::<i16>::with_capacity(buffer.len() / 2);
                         for bytes in buffer.as_slice().chunks(2) {
-                            sample.push(i16::saturating_mul(
-                                i16::from_le_bytes([bytes[0], bytes[1]]),
-                                boost as i16,
-                            ));
+                            sample.push(i16::saturating_mul(i16::from_le_bytes([bytes[0], bytes[1]]), boost as i16));
                         }
                         if let Err(error) = input_tx.blocking_send(sample) {
                             panic!("AudioIn: failed to send audio: {}", error);
@@ -79,7 +71,7 @@ pub fn create_audioin(
     listener
 }
 
-impl AudioInListener {
+impl Listener {
     pub async fn recv(&mut self) -> Vec<i16> {
         self.input_rx.recv().await.unwrap()
     }

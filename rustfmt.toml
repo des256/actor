@@ -1,0 +1,2 @@
+max_width = 128
+ignore = ["actor/src/asr/features.rs"]

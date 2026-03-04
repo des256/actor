@@ -11,10 +11,7 @@ pub struct Vec2<T> {
 
 impl<T: fmt::Debug> fmt::Debug for Vec2<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Vec2")
-            .field("x", &self.x)
-            .field("y", &self.y)
-            .finish()
+        f.debug_struct("Vec2").field("x", &self.x).field("y", &self.y).finish()
     }
 }
 
@@ -64,10 +61,7 @@ impl<T: Sub<Output = T>> Sub for Vec2<T> {
 impl<T: Neg<Output = T>> Neg for Vec2<T> {
     type Output = Self;
     fn neg(self) -> Self {
-        Self {
-            x: -self.x,
-            y: -self.y,
-        }
+        Self { x: -self.x, y: -self.y }
     }
 }
 
@@ -165,10 +159,7 @@ impl<T: Mul<Output = T> + Sub<Output = T> + Copy> Vec2<T> {
 
 impl<T: Neg<Output = T>> Vec2<T> {
     pub fn perp(self) -> Self {
-        Self {
-            x: -self.y,
-            y: self.x,
-        }
+        Self { x: -self.y, y: self.x }
     }
 }
 

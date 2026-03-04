@@ -1,7 +1,7 @@
-use actor::{GpioOutput, Spi, SpiMode, rgb565};
-use std::io;
-use std::thread;
-use std::time::Duration;
+use {
+    actor::*,
+    std::{io, thread, time::Duration},
+};
 
 // Physical pin → Jetson Orin NX gpiochip0 line offsets
 const GPIO_CHIP: u32 = 0; // tegra234-gpio
@@ -16,22 +16,21 @@ fn e(msg: &str) -> impl FnOnce(io::Error) -> io::Error + '_ {
 }
 
 fn main() -> io::Result<()> {
-    let dc = GpioOutput::new(GPIO_CHIP, DC).map_err(e("gpio dc"))?;
-    let bl = GpioOutput::new(GPIO_CHIP, BL).map_err(e("gpio bl"))?;
+    let dc = lcd::GpioOutput::new(GPIO_CHIP, DC).map_err(e("gpio dc"))?;
+    let bl = lcd::GpioOutput::new(GPIO_CHIP, BL).map_err(e("gpio bl"))?;
     bl.set(false).map_err(e("bl off"))?;
     thread::sleep(Duration::from_millis(100));
     bl.set(true).map_err(e("bl on"))?;
-    let left = Spi::open(0, 0).map_err(e("spi open 0.0"))?;
-    let right = Spi::open(0, 1).map_err(e("spi open 0.1"))?;
+    let left = lcd::Spi::open(0, 0).map_err(e("spi open 0.0"))?;
+    let right = lcd::Spi::open(0, 1).map_err(e("spi open 0.1"))?;
     for (_, spi) in [&left, &right].iter().enumerate() {
-        spi.set_mode(SpiMode::Mode0).map_err(e("set_mode"))?;
+        spi.set_mode(lcd::SpiMode::Mode0).map_err(e("set_mode"))?;
         spi.set_lsb_first(false).map_err(e("set_lsb_first"))?;
-        spi.set_max_speed_hz(4_000_000)
-            .map_err(e("set_max_speed_hz"))?;
+        spi.set_max_speed_hz(4_000_000).map_err(e("set_max_speed_hz"))?;
     }
     init_display(&left, &dc)?;
     init_display(&right, &dc)?;
-    let color = rgb565(0, 0, 0);
+    let color = lcd::rgb565(0, 0, 0);
     fill(&left, &dc, color)?;
     fill(&right, &dc, color)?;
     println!("both screens same color — ctrl-c to exit");
@@ -42,12 +41,12 @@ fn main() -> io::Result<()> {
 
 // -- low-level helpers (mirror st7789.rs init sequence) ----------------------
 
-fn cmd(spi: &Spi, dc: &GpioOutput, c: u8) -> io::Result<()> {
+fn cmd(spi: &lcd::Spi, dc: &lcd::GpioOutput, c: u8) -> io::Result<()> {
     dc.set(false)?;
     spi.write(&[c])
 }
 
-fn dat(spi: &Spi, dc: &GpioOutput, d: &[u8]) -> io::Result<()> {
+fn dat(spi: &lcd::Spi, dc: &lcd::GpioOutput, d: &[u8]) -> io::Result<()> {
     dc.set(true)?;
     for chunk in d.chunks(4096) {
         spi.write(chunk)?;
@@ -55,7 +54,7 @@ fn dat(spi: &Spi, dc: &GpioOutput, d: &[u8]) -> io::Result<()> {
     Ok(())
 }
 
-fn init_display(spi: &Spi, dc: &GpioOutput) -> io::Result<()> {
+fn init_display(spi: &lcd::Spi, dc: &lcd::GpioOutput) -> io::Result<()> {
     cmd(spi, dc, 0x01)?; // SWRESET
     thread::sleep(Duration::from_millis(150));
 
@@ -106,7 +105,7 @@ fn init_display(spi: &Spi, dc: &GpioOutput) -> io::Result<()> {
     Ok(())
 }
 
-fn fill(spi: &Spi, dc: &GpioOutput, color: [u8; 2]) -> io::Result<()> {
+fn fill(spi: &lcd::Spi, dc: &lcd::GpioOutput, color: [u8; 2]) -> io::Result<()> {
     let w = WIDTH;
     let h = HEIGHT;
 

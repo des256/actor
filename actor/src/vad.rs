@@ -6,23 +6,18 @@ const FRAME_SIZE: usize = 512;
 const CONTEXT_SIZE: usize = 64;
 
 pub struct Vad {
-    session: Session,
-    state_tensor: Value,
-    sample_rate_tensor: Value,
-    input_tensor: Value,
+    session: onnx::Session,
+    state_tensor: onnx::Value,
+    sample_rate_tensor: onnx::Value,
+    input_tensor: onnx::Value,
 }
 
 impl Vad {
-    pub fn new(onnx: &Arc<Onnx>, executor: &Executor, sample_rate: usize) -> Self {
-        let session = onnx.create_session(
-            executor,
-            &OptimizationLevel::EnableAll,
-            4,
-            SILERO_VAD_MODEL_PATH,
-        );
-        let state_tensor = Value::zeros::<f32>(&onnx, &[2, 1, 128]);
-        let sample_rate_tensor = Value::from_slice::<i64>(&onnx, &[1], &[sample_rate as i64]);
-        let input_tensor = Value::zeros::<f32>(&onnx, &[1, (CONTEXT_SIZE + FRAME_SIZE) as i64]);
+    pub fn new(onnx: &Arc<onnx::Onnx>, executor: onnx::Executor, sample_rate: usize) -> Self {
+        let session = onnx.create_session(executor, onnx::OptimizationLevel::EnableAll, 4, SILERO_VAD_MODEL_PATH);
+        let state_tensor = onnx::Value::zeros::<f32>(&onnx, &[2, 1, 128]);
+        let sample_rate_tensor = onnx::Value::from_slice::<i64>(&onnx, &[1], &[sample_rate as i64]);
+        let input_tensor = onnx::Value::zeros::<f32>(&onnx, &[1, (CONTEXT_SIZE + FRAME_SIZE) as i64]);
         Self {
             session,
             state_tensor,

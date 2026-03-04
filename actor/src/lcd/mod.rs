@@ -206,12 +206,8 @@ impl Spi {
             .iter_mut()
             .map(|t| {
                 let tx_ptr = t.tx.map_or(std::ptr::null(), |b| b.as_ptr());
-                let rx_ptr =
-                    t.rx.as_deref_mut()
-                        .map_or(std::ptr::null_mut(), |b| b.as_mut_ptr());
-                let len =
-                    t.tx.map_or(0, |b| b.len())
-                        .max(t.rx.as_deref().map_or(0, |b| b.len()));
+                let rx_ptr = t.rx.as_deref_mut().map_or(std::ptr::null_mut(), |b| b.as_mut_ptr());
+                let len = t.tx.map_or(0, |b| b.len()).max(t.rx.as_deref().map_or(0, |b| b.len()));
                 let mut x = SpiIocTransfer::zero(len as u32);
                 x.tx_buf = tx_ptr as u64;
                 x.rx_buf = rx_ptr as u64;
@@ -243,10 +239,7 @@ pub struct SpiTransfer<'a> {
 const GPIO_V2_LINE_FLAG_OUTPUT: u64 = 1 << 3;
 
 const fn ioc(dir: u8, ty: u8, nr: u8, size: usize) -> libc::c_ulong {
-    ((dir as libc::c_ulong) << 30)
-        | ((ty as libc::c_ulong) << 8)
-        | (nr as libc::c_ulong)
-        | ((size as libc::c_ulong) << 16)
+    ((dir as libc::c_ulong) << 30) | ((ty as libc::c_ulong) << 8) | (nr as libc::c_ulong) | ((size as libc::c_ulong) << 16)
 }
 
 const fn iowr(ty: u8, nr: u8, size: usize) -> libc::c_ulong {

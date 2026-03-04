@@ -1,0 +1,4 @@
+{
+    "[rust]": { "editor.rulers": [128] },
+    "[dart]": { "editor.rulers": [128] }
+}

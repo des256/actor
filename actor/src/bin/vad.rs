@@ -6,9 +6,9 @@ const FRAMES_PER_CHUNK: usize = 8;
 
 #[tokio::main]
 async fn main() {
-    let mut audioin_listener = create_audioin(SAMPLE_RATE, FRAMES_PER_CHUNK * FRAME_SIZE, None, 3);
-    let onnx = Onnx::new(17);
-    let mut vad = Vad::new(&onnx, &Executor::Cpu, SAMPLE_RATE);
+    let mut audioin_listener = audioin::create(SAMPLE_RATE, FRAMES_PER_CHUNK * FRAME_SIZE, None, 3);
+    let onnx = onnx::Onnx::new(17);
+    let mut vad = vad::Vad::new(&onnx, onnx::Executor::Cpu, SAMPLE_RATE);
     loop {
         let frame = audioin_listener.recv().await;
         let mut probability = 0.0f32;

@@ -194,24 +194,16 @@ unsafe extern "C" {
 }
 
 unsafe extern "C" {
-    pub fn OrtSessionOptionsAppendExecutionProvider_CUDA(
-        options: *mut OrtSessionOptions,
-        device_id: i32,
-    ) -> *mut OrtStatus;
+    pub fn OrtSessionOptionsAppendExecutionProvider_CUDA(options: *mut OrtSessionOptions, device_id: i32) -> *mut OrtStatus;
 }
 
-pub type CreateStatusFn =
-    unsafe extern "C" fn(code: OrtErrorCode, msg: *const c_char) -> *mut OrtStatus;
+pub type CreateStatusFn = unsafe extern "C" fn(code: OrtErrorCode, msg: *const c_char) -> *mut OrtStatus;
 pub type GetErrorCodeFn = unsafe extern "C" fn(status: *const OrtStatus) -> OrtErrorCode;
 pub type GetErrorMessageFn = unsafe extern "C" fn(status: *const OrtStatus) -> *const c_char;
-pub type CreateEnvFn = unsafe extern "C" fn(
-    log_level: OrtLoggingLevel,
-    log_id: *const c_char,
-    out: *mut *mut OrtEnv,
-) -> *mut OrtStatus;
+pub type CreateEnvFn =
+    unsafe extern "C" fn(log_level: OrtLoggingLevel, log_id: *const c_char, out: *mut *mut OrtEnv) -> *mut OrtStatus;
 pub type ReleaseEnvFn = unsafe extern "C" fn(env: *mut OrtEnv);
-pub type GetAllocatorWithDefaultOptionsFn =
-    unsafe extern "C" fn(out: *mut *mut OrtAllocator) -> *mut OrtStatus;
+pub type GetAllocatorWithDefaultOptionsFn = unsafe extern "C" fn(out: *mut *mut OrtAllocator) -> *mut OrtStatus;
 pub type AllocatorFreeFn = unsafe extern "C" fn(allocator: *mut OrtAllocator, ptr: *mut c_void);
 pub type ReleaseStatusFn = unsafe extern "C" fn(status: *mut OrtStatus);
 pub type CreateSessionFn = unsafe extern "C" fn(
@@ -232,11 +224,9 @@ pub type RunFn = unsafe extern "C" fn(
     outputs: *mut *mut OrtValue,
 ) -> *mut OrtStatus;
 
-pub type SessionGetInputCountFn =
-    unsafe extern "C" fn(session: *const OrtSession, out: *mut usize) -> *mut OrtStatus;
+pub type SessionGetInputCountFn = unsafe extern "C" fn(session: *const OrtSession, out: *mut usize) -> *mut OrtStatus;
 
-pub type SessionGetOutputCountFn =
-    unsafe extern "C" fn(session: *const OrtSession, out: *mut usize) -> *mut OrtStatus;
+pub type SessionGetOutputCountFn = unsafe extern "C" fn(session: *const OrtSession, out: *mut usize) -> *mut OrtStatus;
 
 pub type SessionGetInputNameFn = unsafe extern "C" fn(
     session: *const OrtSession,
@@ -252,21 +242,14 @@ pub type SessionGetOutputNameFn = unsafe extern "C" fn(
     value: *mut *mut c_char,
 ) -> *mut OrtStatus;
 
-pub type SessionGetInputTypeInfoFn = unsafe extern "C" fn(
-    session: *const OrtSession,
-    index: usize,
-    type_info: *mut *mut OrtTypeInfo,
-) -> *mut OrtStatus;
+pub type SessionGetInputTypeInfoFn =
+    unsafe extern "C" fn(session: *const OrtSession, index: usize, type_info: *mut *mut OrtTypeInfo) -> *mut OrtStatus;
 
-pub type CreateSessionOptionsFn =
-    unsafe extern "C" fn(out: *mut *mut OrtSessionOptions) -> *mut OrtStatus;
+pub type CreateSessionOptionsFn = unsafe extern "C" fn(out: *mut *mut OrtSessionOptions) -> *mut OrtStatus;
 pub type ReleaseSessionOptionsFn = unsafe extern "C" fn(options: *mut OrtSessionOptions);
-pub type SetSessionGraphOptimizationLevelFn = unsafe extern "C" fn(
-    options: *mut OrtSessionOptions,
-    level: GraphOptimizationLevel,
-) -> *mut OrtStatus;
-pub type SetIntraOpNumThreadsFn =
-    unsafe extern "C" fn(options: *mut OrtSessionOptions, num_threads: i32) -> *mut OrtStatus;
+pub type SetSessionGraphOptimizationLevelFn =
+    unsafe extern "C" fn(options: *mut OrtSessionOptions, level: GraphOptimizationLevel) -> *mut OrtStatus;
+pub type SetIntraOpNumThreadsFn = unsafe extern "C" fn(options: *mut OrtSessionOptions, num_threads: i32) -> *mut OrtStatus;
 pub type CreateCpuMemoryInfoFn = unsafe extern "C" fn(
     allocator_type: OrtAllocatorType,
     mem_type: OrtMemType,
@@ -283,38 +266,22 @@ pub type CreateTensorWithDataAsOrtValueFn = unsafe extern "C" fn(
     out: *mut *mut OrtValue,
 ) -> *mut OrtStatus;
 pub type ReleaseValueFn = unsafe extern "C" fn(value: *mut OrtValue);
-pub type GetTensorMutableDataFn =
-    unsafe extern "C" fn(value: *mut OrtValue, out: *mut *mut c_void) -> *mut OrtStatus;
-pub type GetTensorTypeAndShapeFn = unsafe extern "C" fn(
-    value: *const OrtValue,
-    out: *mut *mut OrtTensorTypeAndShapeInfo,
-) -> *mut OrtStatus;
-pub type ReleaseTensorTypeAndShapeInfoFn =
-    unsafe extern "C" fn(info: *mut OrtTensorTypeAndShapeInfo);
+pub type GetTensorMutableDataFn = unsafe extern "C" fn(value: *mut OrtValue, out: *mut *mut c_void) -> *mut OrtStatus;
+pub type GetTensorTypeAndShapeFn =
+    unsafe extern "C" fn(value: *const OrtValue, out: *mut *mut OrtTensorTypeAndShapeInfo) -> *mut OrtStatus;
+pub type ReleaseTensorTypeAndShapeInfoFn = unsafe extern "C" fn(info: *mut OrtTensorTypeAndShapeInfo);
 pub type ReleaseTypeInfoFn = unsafe extern "C" fn(info: *mut OrtTypeInfo);
-pub type GetTensorElementTypeFn = unsafe extern "C" fn(
-    info: *const OrtTensorTypeAndShapeInfo,
-    out: *mut ONNXTensorElementDataType,
-) -> *mut OrtStatus;
-pub type CastTypeInfoToTensorInfoFn = unsafe extern "C" fn(
-    type_info: *const OrtTypeInfo,
-    out: *mut *const OrtTensorTypeAndShapeInfo,
-) -> *mut OrtStatus;
-pub type GetDimensionsCountFn =
-    unsafe extern "C" fn(info: *const OrtTensorTypeAndShapeInfo, out: *mut usize) -> *mut OrtStatus;
-pub type GetDimensionsFn = unsafe extern "C" fn(
-    info: *const OrtTensorTypeAndShapeInfo,
-    dim_values: *mut i64,
-    dim_count: usize,
-) -> *mut OrtStatus;
+pub type GetTensorElementTypeFn =
+    unsafe extern "C" fn(info: *const OrtTensorTypeAndShapeInfo, out: *mut ONNXTensorElementDataType) -> *mut OrtStatus;
+pub type CastTypeInfoToTensorInfoFn =
+    unsafe extern "C" fn(type_info: *const OrtTypeInfo, out: *mut *const OrtTensorTypeAndShapeInfo) -> *mut OrtStatus;
+pub type GetDimensionsCountFn = unsafe extern "C" fn(info: *const OrtTensorTypeAndShapeInfo, out: *mut usize) -> *mut OrtStatus;
+pub type GetDimensionsFn =
+    unsafe extern "C" fn(info: *const OrtTensorTypeAndShapeInfo, dim_values: *mut i64, dim_count: usize) -> *mut OrtStatus;
 pub type GetTensorShapeElementCountFn =
     unsafe extern "C" fn(info: *const OrtTensorTypeAndShapeInfo, out: *mut usize) -> *mut OrtStatus;
-
-// Model metadata
-pub type SessionGetModelMetadataFn = unsafe extern "C" fn(
-    session: *const OrtSession,
-    out: *mut *mut OrtModelMetadata,
-) -> *mut OrtStatus;
+pub type SessionGetModelMetadataFn =
+    unsafe extern "C" fn(session: *const OrtSession, out: *mut *mut OrtModelMetadata) -> *mut OrtStatus;
 pub type ModelMetadataLookupCustomMetadataMapFn = unsafe extern "C" fn(
     model_metadata: *const OrtModelMetadata,
     allocator: *mut OrtAllocator,
@@ -329,12 +296,6 @@ pub type ModelMetadataGetCustomMetadataMapKeysFn = unsafe extern "C" fn(
 ) -> *mut OrtStatus;
 pub type ReleaseModelMetadataFn = unsafe extern "C" fn(metadata: *mut OrtModelMetadata);
 
-// OrtApi vtable indices — verified against onnxruntime_c_api.h v1.24.2
-// on Jetson (aarch64). These indices are stable across versions since
-// the vtable only grows (new entries appended, existing entries never move).
-//
-// Indices 0-2: raw function pointers (CreateStatus, GetErrorCode, GetErrorMessage)
-// Indices 3+: ORT_API2_STATUS and ORT_CLASS_RELEASE entries
 pub const IDX_CREATE_STATUS: usize = 0;
 pub const IDX_GET_ERROR_CODE: usize = 1;
 pub const IDX_GET_ERROR_MESSAGE: usize = 2;
@@ -351,20 +312,15 @@ pub const IDX_ALLOCATOR_FREE: usize = 76;
 pub const IDX_GET_ALLOCATOR_WITH_DEFAULT_OPTIONS: usize = 78;
 pub const IDX_SET_SESSION_GRAPH_OPTIMIZATION_LEVEL: usize = 23;
 pub const IDX_SET_INTRA_OP_NUM_THREADS: usize = 24;
-// Tensor creation and data access
 pub const IDX_CREATE_TENSOR_WITH_DATA_AS_ORT_VALUE: usize = 49;
 pub const IDX_GET_TENSOR_MUTABLE_DATA: usize = 51;
-// Type info casting
 pub const IDX_CAST_TYPE_INFO_TO_TENSOR_INFO: usize = 55;
-// Tensor type/shape info
 pub const IDX_GET_DIMENSIONS_COUNT: usize = 61;
 pub const IDX_GET_DIMENSIONS: usize = 62;
 pub const IDX_GET_TENSOR_ELEMENT_TYPE: usize = 60;
 pub const IDX_GET_TENSOR_SHAPE_ELEMENT_COUNT: usize = 64;
 pub const IDX_GET_TENSOR_TYPE_AND_SHAPE: usize = 65;
-// Memory info
 pub const IDX_CREATE_CPU_MEMORY_INFO: usize = 69;
-// Release functions
 pub const IDX_RELEASE_ENV: usize = 92;
 pub const IDX_RELEASE_STATUS: usize = 93;
 pub const IDX_RELEASE_MEMORY_INFO: usize = 94;
@@ -374,7 +330,6 @@ pub const IDX_RELEASE_RUN_OPTIONS: usize = 97;
 pub const IDX_RELEASE_TYPE_INFO: usize = 98;
 pub const IDX_RELEASE_TENSOR_TYPE_AND_SHAPE_INFO: usize = 99;
 pub const IDX_RELEASE_SESSION_OPTIONS: usize = 100;
-// Model metadata
 pub const IDX_SESSION_GET_MODEL_METADATA: usize = 111;
 pub const IDX_MODEL_METADATA_LOOKUP_CUSTOM_METADATA_MAP: usize = 116;
 pub const IDX_RELEASE_MODEL_METADATA: usize = 118;
@@ -417,11 +372,13 @@ mod tests {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum Executor {
     Cpu,
     Cuda(usize),
 }
 
+#[derive(Clone, Copy)]
 pub enum OptimizationLevel {
     Disabled,
     EnableBasic,
@@ -500,66 +457,44 @@ impl Onnx {
         let get_error_message: GetErrorMessageFn = unsafe { (*api).get_fn(IDX_GET_ERROR_MESSAGE) };
         let allocator_free: AllocatorFreeFn = unsafe { (*api).get_fn(IDX_ALLOCATOR_FREE) };
         let create_session: CreateSessionFn = unsafe { (*api).get_fn(IDX_CREATE_SESSION) };
-        let create_session_options: CreateSessionOptionsFn =
-            unsafe { (*api).get_fn(IDX_CREATE_SESSION_OPTIONS) };
+        let create_session_options: CreateSessionOptionsFn = unsafe { (*api).get_fn(IDX_CREATE_SESSION_OPTIONS) };
         let set_session_graph_optimization_level: SetSessionGraphOptimizationLevelFn =
             unsafe { (*api).get_fn(IDX_SET_SESSION_GRAPH_OPTIMIZATION_LEVEL) };
-        let set_intra_op_num_threads: SetIntraOpNumThreadsFn =
-            unsafe { (*api).get_fn(IDX_SET_INTRA_OP_NUM_THREADS) };
-        let release_session_options: ReleaseSessionOptionsFn =
-            unsafe { (*api).get_fn(IDX_RELEASE_SESSION_OPTIONS) };
-        let session_get_input_count: SessionGetInputCountFn =
-            unsafe { (*api).get_fn(IDX_SESSION_GET_INPUT_COUNT) };
-        let session_get_output_count: SessionGetOutputCountFn =
-            unsafe { (*api).get_fn(IDX_SESSION_GET_OUTPUT_COUNT) };
-        let session_get_input_name: SessionGetInputNameFn =
-            unsafe { (*api).get_fn(IDX_SESSION_GET_INPUT_NAME) };
-        let session_get_output_name: SessionGetOutputNameFn =
-            unsafe { (*api).get_fn(IDX_SESSION_GET_OUTPUT_NAME) };
-        let session_get_input_type_info: SessionGetInputTypeInfoFn =
-            unsafe { (*api).get_fn(IDX_SESSION_GET_INPUT_TYPE_INFO) };
+        let set_intra_op_num_threads: SetIntraOpNumThreadsFn = unsafe { (*api).get_fn(IDX_SET_INTRA_OP_NUM_THREADS) };
+        let release_session_options: ReleaseSessionOptionsFn = unsafe { (*api).get_fn(IDX_RELEASE_SESSION_OPTIONS) };
+        let session_get_input_count: SessionGetInputCountFn = unsafe { (*api).get_fn(IDX_SESSION_GET_INPUT_COUNT) };
+        let session_get_output_count: SessionGetOutputCountFn = unsafe { (*api).get_fn(IDX_SESSION_GET_OUTPUT_COUNT) };
+        let session_get_input_name: SessionGetInputNameFn = unsafe { (*api).get_fn(IDX_SESSION_GET_INPUT_NAME) };
+        let session_get_output_name: SessionGetOutputNameFn = unsafe { (*api).get_fn(IDX_SESSION_GET_OUTPUT_NAME) };
+        let session_get_input_type_info: SessionGetInputTypeInfoFn = unsafe { (*api).get_fn(IDX_SESSION_GET_INPUT_TYPE_INFO) };
         let release_type_info: ReleaseTypeInfoFn = unsafe { (*api).get_fn(IDX_RELEASE_TYPE_INFO) };
         let cast_type_info_to_tensor_info: CastTypeInfoToTensorInfoFn =
             unsafe { (*api).get_fn(IDX_CAST_TYPE_INFO_TO_TENSOR_INFO) };
-        let get_dimensions_count: GetDimensionsCountFn =
-            unsafe { (*api).get_fn(IDX_GET_DIMENSIONS_COUNT) };
+        let get_dimensions_count: GetDimensionsCountFn = unsafe { (*api).get_fn(IDX_GET_DIMENSIONS_COUNT) };
         let get_dimensions: GetDimensionsFn = unsafe { (*api).get_fn(IDX_GET_DIMENSIONS) };
-        let get_tensor_element_type: GetTensorElementTypeFn =
-            unsafe { (*api).get_fn(IDX_GET_TENSOR_ELEMENT_TYPE) };
+        let get_tensor_element_type: GetTensorElementTypeFn = unsafe { (*api).get_fn(IDX_GET_TENSOR_ELEMENT_TYPE) };
         let run: RunFn = unsafe { (*api).get_fn(IDX_RUN) };
         let release_value: ReleaseValueFn = unsafe { (*api).get_fn(IDX_RELEASE_VALUE) };
         let release_session: ReleaseSessionFn = unsafe { (*api).get_fn(IDX_RELEASE_SESSION) };
-        let create_memory_info: CreateCpuMemoryInfoFn =
-            unsafe { (*api).get_fn(IDX_CREATE_CPU_MEMORY_INFO) };
+        let create_memory_info: CreateCpuMemoryInfoFn = unsafe { (*api).get_fn(IDX_CREATE_CPU_MEMORY_INFO) };
         let create_tensor: CreateTensorWithDataAsOrtValueFn =
             unsafe { (*api).get_fn(IDX_CREATE_TENSOR_WITH_DATA_AS_ORT_VALUE) };
-        let release_memory_info: ReleaseMemoryInfoFn =
-            unsafe { (*api).get_fn(IDX_RELEASE_MEMORY_INFO) };
-        let get_tensor_type_and_shape: GetTensorTypeAndShapeFn =
-            unsafe { (*api).get_fn(IDX_GET_TENSOR_TYPE_AND_SHAPE) };
+        let release_memory_info: ReleaseMemoryInfoFn = unsafe { (*api).get_fn(IDX_RELEASE_MEMORY_INFO) };
+        let get_tensor_type_and_shape: GetTensorTypeAndShapeFn = unsafe { (*api).get_fn(IDX_GET_TENSOR_TYPE_AND_SHAPE) };
         let get_tensor_shape_element_count: GetTensorShapeElementCountFn =
             unsafe { (*api).get_fn(IDX_GET_TENSOR_SHAPE_ELEMENT_COUNT) };
         let release_tensor_type_and_shape_info: ReleaseTensorTypeAndShapeInfoFn =
             unsafe { (*api).get_fn(IDX_RELEASE_TENSOR_TYPE_AND_SHAPE_INFO) };
-        let get_tensor_mutable_data: GetTensorMutableDataFn =
-            unsafe { (*api).get_fn(IDX_GET_TENSOR_MUTABLE_DATA) };
-        let session_get_model_metadata: SessionGetModelMetadataFn =
-            unsafe { (*api).get_fn(IDX_SESSION_GET_MODEL_METADATA) };
+        let get_tensor_mutable_data: GetTensorMutableDataFn = unsafe { (*api).get_fn(IDX_GET_TENSOR_MUTABLE_DATA) };
+        let session_get_model_metadata: SessionGetModelMetadataFn = unsafe { (*api).get_fn(IDX_SESSION_GET_MODEL_METADATA) };
         let model_metadata_lookup_custom_metadata_map: ModelMetadataLookupCustomMetadataMapFn =
             unsafe { (*api).get_fn(IDX_MODEL_METADATA_LOOKUP_CUSTOM_METADATA_MAP) };
         let model_metadata_get_custom_metadata_map_keys: ModelMetadataGetCustomMetadataMapKeysFn =
             unsafe { (*api).get_fn(IDX_MODEL_METADATA_GET_CUSTOM_METADATA_MAP_KEYS) };
-        let release_model_metadata: ReleaseModelMetadataFn =
-            unsafe { (*api).get_fn(IDX_RELEASE_MODEL_METADATA) };
+        let release_model_metadata: ReleaseModelMetadataFn = unsafe { (*api).get_fn(IDX_RELEASE_MODEL_METADATA) };
         let log_id = CString::new("onnx").unwrap();
         let mut environment: *mut OrtEnv = null_mut();
-        let status = unsafe {
-            create_env(
-                OrtLoggingLevel::Warning,
-                log_id.as_ptr(),
-                &mut environment as *mut _,
-            )
-        };
+        let status = unsafe { create_env(OrtLoggingLevel::Warning, log_id.as_ptr(), &mut environment as *mut _) };
         if !status.is_null() {
             panic!("Failed to create ONNX runtime environment");
         }
@@ -611,28 +546,21 @@ impl Onnx {
 
     pub fn create_session(
         self: &Arc<Self>,
-        executor: &Executor,
-        optimization_level: &OptimizationLevel,
+        executor: Executor,
+        optimization_level: OptimizationLevel,
         threads: usize,
         model_path: impl AsRef<Path>,
     ) -> Session {
         let mut options: *mut OrtSessionOptions = null_mut();
         let status = unsafe { (self.create_session_options)(&mut options as *mut _) };
         if !status.is_null() {
-            panic!(
-                "Failed to create session options: {}",
-                self.status_to_string(status)
-            );
+            panic!("Failed to create session options: {}", self.status_to_string(status));
         }
         if let Executor::Cuda(id) = executor {
-            let status =
-                unsafe { OrtSessionOptionsAppendExecutionProvider_CUDA(options, *id as i32) };
+            let status = unsafe { OrtSessionOptionsAppendExecutionProvider_CUDA(options, id as i32) };
             if !status.is_null() {
                 unsafe { (self.release_session_options)(options) };
-                panic!(
-                    "Failed to append execution provider CUDA: {}",
-                    self.status_to_string(status)
-                );
+                panic!("Failed to append execution provider CUDA: {}", self.status_to_string(status));
             }
         }
         let status = unsafe {
@@ -656,10 +584,7 @@ impl Onnx {
         let status = unsafe { (self.set_intra_op_num_threads)(options, threads as i32) };
         if !status.is_null() {
             unsafe { (self.release_session_options)(options) };
-            panic!(
-                "Failed to set intra-op num threads: {}",
-                self.status_to_string(status)
-            );
+            panic!("Failed to set intra-op num threads: {}", self.status_to_string(status));
         }
         let path_str = model_path.as_ref().to_str().unwrap();
         let c_path: CString = match CString::new(path_str) {
@@ -667,20 +592,10 @@ impl Onnx {
             Err(error) => panic!("Null byte in model path: {}", error),
         };
         let mut session: *mut OrtSession = null_mut();
-        let status = unsafe {
-            (self.create_session)(
-                self.environment,
-                c_path.as_ptr(),
-                options,
-                &mut session as *mut _,
-            )
-        };
+        let status = unsafe { (self.create_session)(self.environment, c_path.as_ptr(), options, &mut session as *mut _) };
         if !status.is_null() {
             unsafe { (self.release_session_options)(options) };
-            panic!(
-                "Failed to create session: {}",
-                self.status_to_string(status)
-            );
+            panic!("Failed to create session: {}", self.status_to_string(status));
         }
         unsafe { (self.release_session_options)(options) };
         Session {
@@ -701,46 +616,29 @@ unsafe impl Sync for Session {}
 impl Session {
     pub fn input_count(&self) -> usize {
         let mut count: usize = 0;
-        let status =
-            unsafe { (self.onnx.session_get_input_count)(self.session, &mut count as *mut _) };
+        let status = unsafe { (self.onnx.session_get_input_count)(self.session, &mut count as *mut _) };
         if !status.is_null() {
-            panic!(
-                "Failed to get input count: {}",
-                self.onnx.status_to_string(status)
-            );
+            panic!("Failed to get input count: {}", self.onnx.status_to_string(status));
         }
         count
     }
 
     pub fn output_count(&self) -> usize {
         let mut count: usize = 0;
-        let status =
-            unsafe { (self.onnx.session_get_output_count)(self.session, &mut count as *mut _) };
+        let status = unsafe { (self.onnx.session_get_output_count)(self.session, &mut count as *mut _) };
         if !status.is_null() {
-            panic!(
-                "Failed to get output count: {}",
-                self.onnx.status_to_string(status)
-            );
+            panic!("Failed to get output count: {}", self.onnx.status_to_string(status));
         }
         count
     }
 
     pub fn input_name(&self, index: usize) -> String {
         let mut name_ptr: *mut c_char = null_mut();
-        let status = unsafe {
-            (self.onnx.session_get_input_name)(
-                self.session,
-                index,
-                self.onnx.allocator,
-                &mut name_ptr as *mut _,
-            )
-        };
+        let status =
+            unsafe { (self.onnx.session_get_input_name)(self.session, index, self.onnx.allocator, &mut name_ptr as *mut _) };
         if !status.is_null() {
             unsafe { (self.onnx.allocator_free)(self.onnx.allocator, name_ptr as *mut c_void) };
-            panic!(
-                "Failed to get input name: {}",
-                self.onnx.status_to_string(status)
-            );
+            panic!("Failed to get input name: {}", self.onnx.status_to_string(status));
         }
 
         let name = unsafe {
@@ -755,20 +653,11 @@ impl Session {
 
     pub fn output_name(&self, index: usize) -> String {
         let mut name_ptr: *mut c_char = null_mut();
-        let status = unsafe {
-            (self.onnx.session_get_output_name)(
-                self.session,
-                index,
-                self.onnx.allocator,
-                &mut name_ptr as *mut _,
-            )
-        };
+        let status =
+            unsafe { (self.onnx.session_get_output_name)(self.session, index, self.onnx.allocator, &mut name_ptr as *mut _) };
         if !status.is_null() {
             unsafe { (self.onnx.allocator_free)(self.onnx.allocator, name_ptr as *mut c_void) };
-            panic!(
-                "Failed to get output name: {}",
-                self.onnx.status_to_string(status)
-            );
+            panic!("Failed to get output name: {}", self.onnx.status_to_string(status));
         }
         let name = unsafe {
             CStr::from_ptr(name_ptr)
@@ -782,14 +671,9 @@ impl Session {
 
     fn get_type_info(&self, index: usize) -> *mut OrtTypeInfo {
         let mut type_info: *mut OrtTypeInfo = std::ptr::null_mut();
-        let status = unsafe {
-            (self.onnx.session_get_input_type_info)(self.session, index, &mut type_info as *mut _)
-        };
+        let status = unsafe { (self.onnx.session_get_input_type_info)(self.session, index, &mut type_info as *mut _) };
         if !status.is_null() {
-            panic!(
-                "Failed to get input type info: {}",
-                self.onnx.status_to_string(status)
-            );
+            panic!("Failed to get input type info: {}", self.onnx.status_to_string(status));
         }
         type_info
     }
@@ -802,9 +686,7 @@ impl Session {
         let type_info = self.get_type_info(index);
 
         let mut tensor_info: *const OrtTensorTypeAndShapeInfo = null_mut();
-        let status = unsafe {
-            (self.onnx.cast_type_info_to_tensor_info)(type_info, &mut tensor_info as *mut _)
-        };
+        let status = unsafe { (self.onnx.cast_type_info_to_tensor_info)(type_info, &mut tensor_info as *mut _) };
         if !status.is_null() {
             self.release_type_info(type_info);
             panic!(
@@ -817,24 +699,16 @@ impl Session {
             panic!("Input is not a tensor type");
         }
         let mut dim_count: usize = 0;
-        let status =
-            unsafe { (self.onnx.get_dimensions_count)(tensor_info, &mut dim_count as *mut _) };
+        let status = unsafe { (self.onnx.get_dimensions_count)(tensor_info, &mut dim_count as *mut _) };
         if !status.is_null() {
             self.release_type_info(type_info);
-            panic!(
-                "Failed to get dimensions count: {}",
-                self.onnx.status_to_string(status)
-            );
+            panic!("Failed to get dimensions count: {}", self.onnx.status_to_string(status));
         }
         let mut dims = vec![0i64; dim_count];
-        let status =
-            unsafe { (self.onnx.get_dimensions)(tensor_info, dims.as_mut_ptr(), dim_count) };
+        let status = unsafe { (self.onnx.get_dimensions)(tensor_info, dims.as_mut_ptr(), dim_count) };
         if !status.is_null() {
             self.release_type_info(type_info);
-            panic!(
-                "Failed to get dimensions count: {}",
-                self.onnx.status_to_string(status)
-            );
+            panic!("Failed to get dimensions count: {}", self.onnx.status_to_string(status));
         }
         self.release_type_info(type_info);
         dims
@@ -842,19 +716,12 @@ impl Session {
 
     pub fn input_element_type(&self, index: usize) -> ONNXTensorElementDataType {
         let mut type_info: *mut OrtTypeInfo = null_mut();
-        let status = unsafe {
-            (self.onnx.session_get_input_type_info)(self.session, index, &mut type_info as *mut _)
-        };
+        let status = unsafe { (self.onnx.session_get_input_type_info)(self.session, index, &mut type_info as *mut _) };
         if !status.is_null() {
-            panic!(
-                "Failed to get input type info: {}",
-                self.onnx.status_to_string(status)
-            );
+            panic!("Failed to get input type info: {}", self.onnx.status_to_string(status));
         }
         let mut tensor_info: *const OrtTensorTypeAndShapeInfo = std::ptr::null();
-        let status = unsafe {
-            (self.onnx.cast_type_info_to_tensor_info)(type_info, &mut tensor_info as *mut _)
-        };
+        let status = unsafe { (self.onnx.cast_type_info_to_tensor_info)(type_info, &mut tensor_info as *mut _) };
         if !status.is_null() {
             self.release_type_info(type_info);
             panic!(
@@ -863,14 +730,10 @@ impl Session {
             );
         }
         let mut elem_type = ONNXTensorElementDataType::Undefined;
-        let status =
-            unsafe { (self.onnx.get_tensor_element_type)(tensor_info, &mut elem_type as *mut _) };
+        let status = unsafe { (self.onnx.get_tensor_element_type)(tensor_info, &mut elem_type as *mut _) };
         self.release_type_info(type_info);
         if !status.is_null() {
-            panic!(
-                "Failed to get tensor element type: {}",
-                self.onnx.status_to_string(status)
-            );
+            panic!("Failed to get tensor element type: {}", self.onnx.status_to_string(status));
         }
         elem_type
     }
@@ -878,14 +741,9 @@ impl Session {
     /// Get custom metadata from the model as a key-value map.
     pub fn metadata(&self) -> HashMap<String, String> {
         let mut metadata: *mut OrtModelMetadata = std::ptr::null_mut();
-        let status = unsafe {
-            (self.onnx.session_get_model_metadata)(self.session, &mut metadata as *mut _)
-        };
+        let status = unsafe { (self.onnx.session_get_model_metadata)(self.session, &mut metadata as *mut _) };
         if !status.is_null() {
-            panic!(
-                "Failed to get model metadata: {}",
-                self.onnx.status_to_string(status)
-            );
+            panic!("Failed to get model metadata: {}", self.onnx.status_to_string(status));
         }
         let mut keys_ptr: *mut *mut c_char = null_mut();
         let mut num_keys: i64 = 0;
@@ -899,10 +757,7 @@ impl Session {
         };
         if !status.is_null() {
             unsafe { (self.onnx.release_model_metadata)(metadata) };
-            panic!(
-                "Failed to get model metadata keys: {}",
-                self.onnx.status_to_string(status)
-            );
+            panic!("Failed to get model metadata keys: {}", self.onnx.status_to_string(status));
         }
         let mut map = HashMap::new();
         for i in 0..num_keys as usize {
@@ -924,16 +779,11 @@ impl Session {
             if !status.is_null() {
                 unsafe { (self.onnx.allocator_free)(self.onnx.allocator, key_ptr as *mut _) };
                 for j in (i + 1)..num_keys as usize {
-                    unsafe {
-                        (self.onnx.allocator_free)(self.onnx.allocator, *keys_ptr.add(j) as *mut _)
-                    };
+                    unsafe { (self.onnx.allocator_free)(self.onnx.allocator, *keys_ptr.add(j) as *mut _) };
                 }
                 unsafe { (self.onnx.allocator_free)(self.onnx.allocator, keys_ptr as *mut _) };
                 unsafe { (self.onnx.release_model_metadata)(metadata) };
-                panic!(
-                    "Failed to lookup custom metadata map: {}",
-                    self.onnx.status_to_string(status)
-                );
+                panic!("Failed to lookup custom metadata map: {}", self.onnx.status_to_string(status));
             }
             if !value_ptr.is_null() {
                 let value = unsafe { CStr::from_ptr(value_ptr).to_string_lossy().into_owned() };
@@ -967,8 +817,7 @@ impl Session {
             })
             .collect();
         let output_name_ptrs: Vec<_> = output_name_cstrings.iter().map(|s| s.as_ptr()).collect();
-        let mut output_value_ptrs: Vec<*mut OrtValue> =
-            vec![std::ptr::null_mut(); output_names.len()];
+        let mut output_value_ptrs: Vec<*mut OrtValue> = vec![std::ptr::null_mut(); output_names.len()];
         let status = unsafe {
             (self.onnx.run)(
                 self.session,
@@ -987,10 +836,7 @@ impl Session {
                     unsafe { (self.onnx.release_value)(output_ptr) };
                 }
             }
-            panic!(
-                "Failed to run inference: {}",
-                self.onnx.status_to_string(status)
-            );
+            panic!("Failed to run inference: {}", self.onnx.status_to_string(status));
         }
         let outputs: Vec<_> = output_value_ptrs
             .into_iter()
@@ -1073,18 +919,10 @@ impl Value {
         let src_ptr = data.as_ptr() as *const u8;
         unsafe { std::ptr::copy_nonoverlapping(src_ptr, buffer.as_mut_ptr(), byte_len) };
         let mut memory_info: *mut OrtMemoryInfo = std::ptr::null_mut();
-        let status = unsafe {
-            (onnx.create_memory_info)(
-                OrtAllocatorType::Device,
-                OrtMemType::CpuOutput,
-                &mut memory_info as *mut _,
-            )
-        };
+        let status =
+            unsafe { (onnx.create_memory_info)(OrtAllocatorType::Device, OrtMemType::CpuOutput, &mut memory_info as *mut _) };
         if !status.is_null() {
-            panic!(
-                "Failed to create memory info: {}",
-                onnx.status_to_string(status)
-            );
+            panic!("Failed to create memory info: {}", onnx.status_to_string(status));
         }
         let shape_i64: Vec<i64> = shape.iter().map(|&s| s as i64).collect();
         let mut value: *mut OrtValue = std::ptr::null_mut();
@@ -1116,26 +954,14 @@ impl Value {
         unsafe { std::slice::from_raw_parts_mut(self._data.as_mut_ptr() as *mut T, count) }
     }
 
-    pub fn empty_typed(
-        onnx: &Arc<Onnx>,
-        shape: &[usize],
-        element_type: ONNXTensorElementDataType,
-    ) -> Self {
+    pub fn empty_typed(onnx: &Arc<Onnx>, shape: &[usize], element_type: ONNXTensorElementDataType) -> Self {
         let buffer = vec![0u8; 0].into_boxed_slice();
 
         let mut memory_info: *mut OrtMemoryInfo = std::ptr::null_mut();
-        let status = unsafe {
-            (onnx.create_memory_info)(
-                OrtAllocatorType::Device,
-                OrtMemType::CpuOutput,
-                &mut memory_info as *mut _,
-            )
-        };
+        let status =
+            unsafe { (onnx.create_memory_info)(OrtAllocatorType::Device, OrtMemType::CpuOutput, &mut memory_info as *mut _) };
         if !status.is_null() {
-            panic!(
-                "Failed to create memory info: {}",
-                onnx.status_to_string(status)
-            );
+            panic!("Failed to create memory info: {}", onnx.status_to_string(status));
         }
         let shape_i64: Vec<i64> = shape.iter().map(|&s| s as i64).collect();
         let mut value: *mut OrtValue = std::ptr::null_mut();
@@ -1163,10 +989,7 @@ impl Value {
     }
 
     pub fn zeros<T: TensorElement + Default>(onnx: &Arc<Onnx>, shape: &[i64]) -> Self {
-        let resolved: Vec<usize> = shape
-            .iter()
-            .map(|&d| if d < 0 { 1 } else { d as usize })
-            .collect();
+        let resolved: Vec<usize> = shape.iter().map(|&d| if d < 0 { 1 } else { d as usize }).collect();
         let total: usize = resolved.iter().product();
         let data = vec![T::default(); total];
         Self::from_slice(onnx, &resolved, &data)
@@ -1174,28 +997,18 @@ impl Value {
 
     pub fn extract_tensor<T: TensorElement>(&self) -> &[T] {
         let mut type_info: *mut OrtTensorTypeAndShapeInfo = std::ptr::null_mut();
-        let status =
-            unsafe { (self.onnx.get_tensor_type_and_shape)(self.value, &mut type_info as *mut _) };
+        let status = unsafe { (self.onnx.get_tensor_type_and_shape)(self.value, &mut type_info as *mut _) };
         if !status.is_null() {
-            panic!(
-                "Failed to get tensor type and shape: {}",
-                self.onnx.status_to_string(status)
-            );
+            panic!("Failed to get tensor type and shape: {}", self.onnx.status_to_string(status));
         }
         let mut element_type = ONNXTensorElementDataType::Undefined;
-        let status =
-            unsafe { (self.onnx.get_tensor_element_type)(type_info, &mut element_type as *mut _) };
+        let status = unsafe { (self.onnx.get_tensor_element_type)(type_info, &mut element_type as *mut _) };
         if !status.is_null() {
             unsafe { (self.onnx.release_tensor_type_and_shape_info)(type_info) };
-            panic!(
-                "Failed to get tensor element type: {}",
-                self.onnx.status_to_string(status)
-            );
+            panic!("Failed to get tensor element type: {}", self.onnx.status_to_string(status));
         }
         let mut elem_count: usize = 0;
-        let status = unsafe {
-            (self.onnx.get_tensor_shape_element_count)(type_info, &mut elem_count as *mut _)
-        };
+        let status = unsafe { (self.onnx.get_tensor_shape_element_count)(type_info, &mut elem_count as *mut _) };
         if !status.is_null() {
             unsafe { (self.onnx.release_tensor_type_and_shape_info)(type_info) };
             panic!(
@@ -1215,13 +1028,9 @@ impl Value {
             return &[];
         }
         let mut data_ptr: *mut c_void = std::ptr::null_mut();
-        let status =
-            unsafe { (self.onnx.get_tensor_mutable_data)(self.value, &mut data_ptr as *mut _) };
+        let status = unsafe { (self.onnx.get_tensor_mutable_data)(self.value, &mut data_ptr as *mut _) };
         if !status.is_null() {
-            panic!(
-                "Failed to get tensor mutable data: {}",
-                self.onnx.status_to_string(status)
-            );
+            panic!("Failed to get tensor mutable data: {}", self.onnx.status_to_string(status));
         }
         unsafe { std::slice::from_raw_parts(data_ptr as *const T, elem_count) }
     }
@@ -1235,19 +1044,12 @@ impl Value {
             }
             ONNXTensorElementDataType::Float16 => {
                 let mut type_info: *mut OrtTensorTypeAndShapeInfo = std::ptr::null_mut();
-                let status = unsafe {
-                    (self.onnx.get_tensor_type_and_shape)(self.value, &mut type_info as *mut _)
-                };
+                let status = unsafe { (self.onnx.get_tensor_type_and_shape)(self.value, &mut type_info as *mut _) };
                 if !status.is_null() {
-                    panic!(
-                        "Failed to get tensor type and shape: {}",
-                        self.onnx.status_to_string(status)
-                    );
+                    panic!("Failed to get tensor type and shape: {}", self.onnx.status_to_string(status));
                 }
                 let mut elem_count: usize = 0;
-                let status = unsafe {
-                    (self.onnx.get_tensor_shape_element_count)(type_info, &mut elem_count as *mut _)
-                };
+                let status = unsafe { (self.onnx.get_tensor_shape_element_count)(type_info, &mut elem_count as *mut _) };
                 if !status.is_null() {
                     unsafe { (self.onnx.release_tensor_type_and_shape_info)(type_info) };
                     panic!(
@@ -1260,17 +1062,11 @@ impl Value {
                     return Vec::new();
                 }
                 let mut data_ptr: *mut c_void = std::ptr::null_mut();
-                let status = unsafe {
-                    (self.onnx.get_tensor_mutable_data)(self.value, &mut data_ptr as *mut _)
-                };
+                let status = unsafe { (self.onnx.get_tensor_mutable_data)(self.value, &mut data_ptr as *mut _) };
                 if !status.is_null() {
-                    panic!(
-                        "Failed to get tensor mutable data: {}",
-                        self.onnx.status_to_string(status)
-                    );
+                    panic!("Failed to get tensor mutable data: {}", self.onnx.status_to_string(status));
                 }
-                let f16_data =
-                    unsafe { std::slice::from_raw_parts(data_ptr as *const u16, elem_count) };
+                let f16_data = unsafe { std::slice::from_raw_parts(data_ptr as *const u16, elem_count) };
                 f16_data.iter().map(|&h| f16_to_f32(h)).collect()
             }
             other => panic!("extract_as_f32: unsupported element type {:?}", other),
@@ -1279,32 +1075,21 @@ impl Value {
 
     pub fn tensor_shape(&self) -> Vec<i64> {
         let mut type_info: *mut OrtTensorTypeAndShapeInfo = std::ptr::null_mut();
-        let status =
-            unsafe { (self.onnx.get_tensor_type_and_shape)(self.value, &mut type_info as *mut _) };
+        let status = unsafe { (self.onnx.get_tensor_type_and_shape)(self.value, &mut type_info as *mut _) };
         if !status.is_null() {
-            panic!(
-                "Failed to get tensor type and shape: {}",
-                self.onnx.status_to_string(status)
-            );
+            panic!("Failed to get tensor type and shape: {}", self.onnx.status_to_string(status));
         }
         let mut dim_count: usize = 0;
-        let status =
-            unsafe { (self.onnx.get_dimensions_count)(type_info, &mut dim_count as *mut _) };
+        let status = unsafe { (self.onnx.get_dimensions_count)(type_info, &mut dim_count as *mut _) };
         if !status.is_null() {
             unsafe { (self.onnx.release_tensor_type_and_shape_info)(type_info) };
-            panic!(
-                "Failed to get dimensions count: {}",
-                self.onnx.status_to_string(status)
-            );
+            panic!("Failed to get dimensions count: {}", self.onnx.status_to_string(status));
         }
         let mut dims = vec![0i64; dim_count];
         let status = unsafe { (self.onnx.get_dimensions)(type_info, dims.as_mut_ptr(), dim_count) };
         if !status.is_null() {
             unsafe { (self.onnx.release_tensor_type_and_shape_info)(type_info) };
-            panic!(
-                "Failed to get dimensions: {}",
-                self.onnx.status_to_string(status)
-            );
+            panic!("Failed to get dimensions: {}", self.onnx.status_to_string(status));
         }
         unsafe { (self.onnx.release_tensor_type_and_shape_info)(type_info) };
         dims
@@ -1312,23 +1097,15 @@ impl Value {
 
     pub fn tensor_element_type(&self) -> ONNXTensorElementDataType {
         let mut type_info: *mut OrtTensorTypeAndShapeInfo = std::ptr::null_mut();
-        let status =
-            unsafe { (self.onnx.get_tensor_type_and_shape)(self.value, &mut type_info as *mut _) };
+        let status = unsafe { (self.onnx.get_tensor_type_and_shape)(self.value, &mut type_info as *mut _) };
         if !status.is_null() {
-            panic!(
-                "Failed to get tensor type and shape: {}",
-                self.onnx.status_to_string(status)
-            );
+            panic!("Failed to get tensor type and shape: {}", self.onnx.status_to_string(status));
         }
         let mut element_type = ONNXTensorElementDataType::Undefined;
-        let status =
-            unsafe { (self.onnx.get_tensor_element_type)(type_info, &mut element_type as *mut _) };
+        let status = unsafe { (self.onnx.get_tensor_element_type)(type_info, &mut element_type as *mut _) };
         if !status.is_null() {
             unsafe { (self.onnx.release_tensor_type_and_shape_info)(type_info) };
-            panic!(
-                "Failed to get tensor element type: {}",
-                self.onnx.status_to_string(status)
-            );
+            panic!("Failed to get tensor element type: {}", self.onnx.status_to_string(status));
         }
         unsafe { (self.onnx.release_tensor_type_and_shape_info)(type_info) };
         element_type
@@ -1351,15 +1128,9 @@ impl Value {
         let shape_usize: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
         let elem_type = self.tensor_element_type();
         match elem_type {
-            ONNXTensorElementDataType::Float => {
-                Self::from_slice(&self.onnx, &shape_usize, self.extract_tensor::<f32>())
-            }
-            ONNXTensorElementDataType::Int64 => {
-                Self::from_slice(&self.onnx, &shape_usize, self.extract_tensor::<i64>())
-            }
-            ONNXTensorElementDataType::Bool => {
-                Self::from_slice(&self.onnx, &shape_usize, self.extract_tensor::<bool>())
-            }
+            ONNXTensorElementDataType::Float => Self::from_slice(&self.onnx, &shape_usize, self.extract_tensor::<f32>()),
+            ONNXTensorElementDataType::Int64 => Self::from_slice(&self.onnx, &shape_usize, self.extract_tensor::<i64>()),
+            ONNXTensorElementDataType::Bool => Self::from_slice(&self.onnx, &shape_usize, self.extract_tensor::<bool>()),
             other => panic!("Unsupported element type {:?} for deepclone", other),
         }
     }

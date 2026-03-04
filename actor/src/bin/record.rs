@@ -14,7 +14,7 @@ async fn main() {
         panic!("usage: record <wav_file>");
     }
     let path = &args[1];
-    let mut audioin_listener = create_audioin(SAMPLE_RATE, CHUNK_SIZE, None, 3);
+    let mut audioin_listener = audioin::create(SAMPLE_RATE, CHUNK_SIZE, None, 3);
     let spec = WavSpec {
         channels: 1,
         sample_rate: SAMPLE_RATE as u32,
@@ -25,9 +25,9 @@ async fn main() {
     println!("recording {} seconds...", RECORDING_SECONDS);
     let mut total_samples = 0usize;
     while total_samples < SAMPLE_RATE * RECORDING_SECONDS {
-        let chunk = audioin_listener.recv().await;
-        total_samples += chunk.len();
-        for sample in chunk {
+        let audio = audioin_listener.recv().await;
+        total_samples += audio.len();
+        for sample in audio {
             writer.write_sample(sample).unwrap();
         }
     }
