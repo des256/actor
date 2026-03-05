@@ -6,15 +6,15 @@ use super::*;
 // 4. chat history
 // 5. main setup with recap
 
-pub fn build(
+pub async fn build(
     model: llm::Model,
     identity: &str,
     personality: &str,
     tools: &str,
     facts: &str,
-    history: &history::ChatHistory,
+    history: &history::History,
 ) -> String {
-    let (summary, history) = history.summarize(5);
+    let (summary, history) = history.summarize(5).await;
     match model {
         llm::Model::Phi3 => {
             let mut short_history = String::new();

@@ -56,8 +56,8 @@ pub struct Input<T: Clone + Send + 'static> {
 }
 
 pub enum Output<T: Clone + Send + 'static> {
-    Token { payload: T, token: String },
-    Eos { payload: T },
+    Token { payload: T, token: String, stamp: u64 },
+    Eos { payload: T, stamp: u64 },
 }
 
 pub struct Handle<T: Clone + Send + 'static> {
@@ -280,6 +280,7 @@ pub fn create<T: Clone + Send + 'static>(
                         output_tx
                             .blocking_send(Output::Eos {
                                 payload: input.payload.clone(),
+                                stamp: epoch.current(),
                             })
                             .unwrap();
                         break;
@@ -301,6 +302,7 @@ pub fn create<T: Clone + Send + 'static>(
                         if let Err(error) = output_tx.blocking_send(Output::Token {
                             payload: input.payload.clone(),
                             token: delta.to_string(),
+                            stamp: epoch.current(),
                         }) {
                             panic!("Llm: failed to send token: {}", error);
                         }

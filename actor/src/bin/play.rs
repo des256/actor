@@ -24,15 +24,9 @@ async fn main() {
     audioout_handle.send(audio);
     loop {
         match audioout_listener.recv().await {
-            audioout::Status::Started(_) => {
-                println!("started");
-            }
-            audioout::Status::Finished { payload: _, index } => {
-                println!("finished: {}", index);
-            }
-            audioout::Status::Canceled { payload: _, index } => {
-                println!("canceled: {}", index);
-            }
+            audioout::Status::Started(_) => {}
+            audioout::Status::Finished { .. } => {}
+            audioout::Status::Canceled { .. } => {}
         }
     }
 }

@@ -1,11 +1,11 @@
 use {actor::*, std::collections::VecDeque};
 
 const ASR_SAMPLE_RATE: usize = 16000;
-const ASR_FRAME_SIZE: usize = 512;
-const FRAMES_PER_CHUNK: usize = 8;
+const VAD_FRAME_SIZE: usize = 512;
+const VAD_FRAMES_PER_CHUNK: usize = 8;
 const VAD_LIMIT: f32 = 0.5;
-const PREROLL_CHUNKS: usize = 1;
-const COOLDOWN_FRAMES: usize = 10;
+const VAD_PREROLL_CHUNKS: usize = 1;
+const VAD_COOLDOWN_FRAMES: usize = 10;
 
 enum State {
     Idle,
@@ -15,7 +15,7 @@ enum State {
 
 #[tokio::main]
 async fn main() {
-    let mut audioin_listener = audioin::create(ASR_SAMPLE_RATE, FRAMES_PER_CHUNK * ASR_FRAME_SIZE, None, 3);
+    let mut audioin_listener = audioin::create(ASR_SAMPLE_RATE, VAD_FRAMES_PER_CHUNK * VAD_FRAME_SIZE, None, 3);
     let onnx = onnx::Onnx::new(17);
     let mut vad = vad::Vad::new(&onnx, onnx::Executor::Cpu, ASR_SAMPLE_RATE);
     let (asr_handle, mut asr_listener) = asr::create::<()>(&onnx, onnx::Executor::Cuda(0));
@@ -24,12 +24,12 @@ async fn main() {
     tokio::spawn({
         async move {
             let mut state = State::Idle;
-            let mut preroll: VecDeque<Vec<i16>> = VecDeque::with_capacity(PREROLL_CHUNKS + 1);
+            let mut preroll: VecDeque<Vec<i16>> = VecDeque::with_capacity(VAD_PREROLL_CHUNKS + 1);
             loop {
                 let audio = audioin_listener.recv().await;
                 let mut speech_started = false;
                 let mut speech_ended = false;
-                for chunk in audio.chunks_exact(ASR_FRAME_SIZE) {
+                for chunk in audio.chunks_exact(VAD_FRAME_SIZE) {
                     let probability = vad.analyze(chunk);
                     match &mut state {
                         State::Idle => {
@@ -40,7 +40,7 @@ async fn main() {
                         }
                         State::Speaking => {
                             if probability < VAD_LIMIT {
-                                state = State::Cooldown(COOLDOWN_FRAMES);
+                                state = State::Cooldown(VAD_COOLDOWN_FRAMES);
                             }
                         }
                         State::Cooldown(remaining) => {
@@ -76,7 +76,7 @@ async fn main() {
                         flush: speech_ended,
                     });
                 } else {
-                    if preroll.len() >= PREROLL_CHUNKS {
+                    if preroll.len() >= VAD_PREROLL_CHUNKS {
                         preroll.pop_front();
                     }
                     preroll.push_back(audio);

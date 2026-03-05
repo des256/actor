@@ -19,7 +19,6 @@ async fn main() {
         async move {
             loop {
                 let output = tts_listener.recv().await;
-                println!("received audio {}", output.index);
                 audioout_handle.send(audioout::Input {
                     payload: (),
                     data: output.audio,
@@ -29,33 +28,20 @@ async fn main() {
         }
     });
 
-    // spawn audioout status pump
-    tokio::spawn({
-        async move {
-            loop {
-                match audioout_listener.recv().await {
-                    audioout::Status::Started(_) => {
-                        println!("started");
-                    }
-                    audioout::Status::Finished { payload: _, index } => {
-                        println!("finished {}", index);
-                    }
-                    audioout::Status::Canceled { payload: _, index } => {
-                        println!("canceled {}", index);
-                    }
-                }
-            }
-        }
-    });
-
     // send sentence to TTS
-    println!("sending sentence...");
+    println!("sending sentence to TTS, press CTRL-C to exit...");
     tts_handle.send(tts::Input {
         payload: (),
         sentence: "The weather patterns in this region are dictated by the surrounding mountains. While the valleys remain dry, the peaks often collect moisture, creating a unique microclimate that shifts throughout the afternoon.".to_string(),
         stamp: epoch.current(),
     });
 
-    // keep alive
-    std::future::pending::<()>().await;
+    // infinitely wait for audioout status
+    loop {
+        match audioout_listener.recv().await {
+            audioout::Status::Started(_) => {}
+            audioout::Status::Finished { .. } => {}
+            audioout::Status::Canceled { .. } => {}
+        }
+    }
 }
