@@ -15,17 +15,21 @@ pub struct Listener<T: Clone + Send + 'static> {
 }
 
 pub fn create<T: Clone + Send + 'static>(onnx: &Arc<onnx::Onnx>, executor: onnx::Executor) -> (Handle<T>, Listener<T>) {
+    // create channels
     let (input_tx, input_rx) = std_mpsc::channel::<asr::Input<T>>();
     let (output_tx, output_rx) = tokio_mpsc::channel::<asr::Output<T>>(CHANNEL_CAPACITY);
+
+    // load models
+    let mut feature_extractor = FeatureExtractor::new();
+    let mut encoder = Encoder::new(&onnx, executor);
+    let mut decoder = Decoder::new(&onnx, executor);
+    let tokenizer = Tokenizer::new();
+
+    // start audio pump
     std::thread::spawn({
-        let onnx = Arc::clone(&onnx);
         move || {
-            let mut feature_extractor = FeatureExtractor::new();
             let mut features = Vec::new();
             let mut frames = 0usize;
-            let mut encoder = Encoder::new(&onnx, executor);
-            let mut decoder = Decoder::new(&onnx, executor);
-            let tokenizer = Tokenizer::new();
             let mut accumulator = String::new();
 
             // input pump

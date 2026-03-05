@@ -1,5 +1,5 @@
 use {
-    crate::*,
+    super::*,
     libpulse_binding::{
         sample::{Format, Spec},
         stream::Direction,
@@ -11,10 +11,10 @@ use {
 
 const CHANNEL_CAPACITY: usize = 8;
 
-pub struct Audio<T: Clone + Send + 'static> {
+pub struct Input<T: Clone + Send + 'static> {
     pub payload: T,
     pub data: Vec<i16>,
-    pub epoch: u64,
+    pub stamp: u64,
 }
 
 pub enum Status<T: Clone + Send + 'static> {
@@ -24,11 +24,11 @@ pub enum Status<T: Clone + Send + 'static> {
 }
 
 pub struct Handle<T: Clone + Send + 'static> {
-    output_tx: std_mpsc::Sender<Audio<T>>,
+    tx: std_mpsc::Sender<Input<T>>,
 }
 
 pub struct Listener<T: Clone + Send + 'static> {
-    status_rx: tokio_mpsc::Receiver<Status<T>>,
+    rx: tokio_mpsc::Receiver<Status<T>>,
 }
 
 pub fn create<T: Clone + Send + 'static>(
@@ -37,10 +37,8 @@ pub fn create<T: Clone + Send + 'static>(
     device_name: Option<&str>,
     epoch: &Arc<Epoch>,
 ) -> (Handle<T>, Listener<T>) {
-    let (output_tx, output_rx) = std_mpsc::channel::<Audio<T>>();
+    let (input_tx, input_rx) = std_mpsc::channel::<Input<T>>();
     let (status_tx, status_rx) = tokio_mpsc::channel::<Status<T>>(CHANNEL_CAPACITY);
-    let handle = Handle { output_tx };
-    let listener = Listener { status_rx };
     std::thread::spawn({
         let device_name = match device_name {
             Some(name) => Some(name.to_string()),
@@ -66,12 +64,12 @@ pub fn create<T: Clone + Send + 'static>(
                 Ok(pulse) => pulse,
                 Err(error) => panic!("AudioOut: failed to connect to PulseAudio: {}", error),
             };
-            let mut current_chunk: Option<Audio<T>> = None;
+            let mut current_chunk: Option<Input<T>> = None;
             let mut current_index = 0usize;
             let mut buffer = vec![0i16; chunk_size];
             loop {
                 if let Some(chunk) = &current_chunk {
-                    if !epoch.is_current(chunk.epoch) {
+                    if !epoch.is_current(chunk.stamp) {
                         let chunk = current_chunk.take().unwrap();
                         if let Err(error) = status_tx.blocking_send(Status::Canceled {
                             payload: chunk.payload,
@@ -102,9 +100,9 @@ pub fn create<T: Clone + Send + 'static>(
                             current_chunk = None;
                         }
                     } else {
-                        match output_rx.try_recv() {
+                        match input_rx.try_recv() {
                             Ok(chunk) => {
-                                if !epoch.is_current(chunk.epoch) {
+                                if !epoch.is_current(chunk.stamp) {
                                     continue;
                                 }
                                 if let Err(error) = status_tx.blocking_send(Status::Started(chunk.payload.clone())) {
@@ -132,24 +130,24 @@ pub fn create<T: Clone + Send + 'static>(
             }
         }
     });
-    (handle, listener)
+    (Handle { tx: input_tx }, Listener { rx: status_rx })
 }
 
 impl<T: Clone + Send + 'static> Handle<T> {
-    pub fn send(&self, audio: Audio<T>) {
-        if let Err(error) = self.output_tx.send(audio) {
+    pub fn send(&self, input: Input<T>) {
+        if let Err(error) = self.tx.send(input) {
             panic!("AudioOut: failed to send audio: {}", error);
         }
     }
 }
 
 impl<T: Clone + Send + 'static> Listener<T> {
-    pub async fn recv(&mut self) -> Option<Status<T>> {
-        self.status_rx.recv().await
+    pub async fn recv(&mut self) -> Status<T> {
+        self.rx.recv().await.unwrap()
     }
 
     pub fn try_recv(&mut self) -> Option<Status<T>> {
-        match self.status_rx.try_recv() {
+        match self.rx.try_recv() {
             Ok(status) => Some(status),
             Err(tokio_mpsc::error::TryRecvError::Empty) => None,
             Err(tokio_mpsc::error::TryRecvError::Disconnected) => {

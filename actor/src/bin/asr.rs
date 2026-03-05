@@ -1,7 +1,7 @@
 use {actor::*, std::collections::VecDeque};
 
-const SAMPLE_RATE: usize = 16000;
-const FRAME_SIZE: usize = 512;
+const ASR_SAMPLE_RATE: usize = 16000;
+const ASR_FRAME_SIZE: usize = 512;
 const FRAMES_PER_CHUNK: usize = 8;
 const VAD_LIMIT: f32 = 0.5;
 const PREROLL_CHUNKS: usize = 1;
@@ -15,9 +15,9 @@ enum State {
 
 #[tokio::main]
 async fn main() {
-    let mut audioin_listener = audioin::create(SAMPLE_RATE, FRAMES_PER_CHUNK * FRAME_SIZE, None, 3);
+    let mut audioin_listener = audioin::create(ASR_SAMPLE_RATE, FRAMES_PER_CHUNK * ASR_FRAME_SIZE, None, 3);
     let onnx = onnx::Onnx::new(17);
-    let mut vad = vad::Vad::new(&onnx, onnx::Executor::Cpu, SAMPLE_RATE);
+    let mut vad = vad::Vad::new(&onnx, onnx::Executor::Cpu, ASR_SAMPLE_RATE);
     let (asr_handle, mut asr_listener) = asr::create::<()>(&onnx, onnx::Executor::Cuda(0));
 
     // audioin pump
@@ -29,7 +29,7 @@ async fn main() {
                 let audio = audioin_listener.recv().await;
                 let mut speech_started = false;
                 let mut speech_ended = false;
-                for chunk in audio.chunks_exact(FRAME_SIZE) {
+                for chunk in audio.chunks_exact(ASR_FRAME_SIZE) {
                     let probability = vad.analyze(chunk);
                     match &mut state {
                         State::Idle => {

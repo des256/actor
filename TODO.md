@@ -1,5 +1,4 @@
-- add ASR
-- add LLMs
-- add TTS
+- Pocket TTS
+- Qwen 2.5
 - rebuild audio pipeline
 - clean up st7789.rs

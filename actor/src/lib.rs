@@ -1,3 +1,6 @@
+mod log;
+pub use log::*;
+
 mod epoch;
 pub use epoch::*;
 
@@ -10,7 +13,11 @@ pub use codec::*;
 pub mod asr;
 pub mod audioin;
 pub mod audioout;
+pub mod history;
 pub mod lcd;
+pub mod llm;
 pub mod onnx;
+pub mod prompt;
+pub mod tts;
 pub mod vad;
 pub mod wsserver;

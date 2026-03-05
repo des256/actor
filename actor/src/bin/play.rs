@@ -15,15 +15,15 @@ async fn main() {
         panic!("input file must be mono");
     }
     let epoch = Arc::new(Epoch::new());
-    let audio = audioout::Audio {
+    let audio = audioout::Input {
         payload: (),
         data: reader.samples::<i16>().collect::<Result<Vec<i16>, _>>().unwrap(),
-        epoch: epoch.current(),
+        stamp: epoch.current(),
     };
     let (audioout_handle, mut audioout_listener) = audioout::create::<()>(spec.sample_rate as usize, CHUNK_SIZE, None, &epoch);
     audioout_handle.send(audio);
-    while let Some(status) = audioout_listener.recv().await {
-        match status {
+    loop {
+        match audioout_listener.recv().await {
             audioout::Status::Started(_) => {
                 println!("started");
             }

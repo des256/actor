@@ -1,4 +1,4 @@
-use {crate::*, std::sync::Arc};
+use {super::*, std::sync::Arc};
 
 const SILERO_VAD_MODEL_PATH: &str = "data/silero_vad.onnx";
 

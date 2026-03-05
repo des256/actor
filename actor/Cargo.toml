@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+tokenizers = { version = "0.21", default-features = false, features = [
+    "fancy-regex",
+] }
 futures-util = { version = "0.3", features = ["sink"] }
 libc = "0.2"
 hound = "3.5"
@@ -24,3 +27,5 @@ tokio-websockets = { version = "0.11", features = [
     "sha1_smol",
     "fastrand",
 ] }
+rand = "0.8"
+rand_distr = "0.4"

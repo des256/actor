@@ -267,6 +267,13 @@ pub type CreateTensorWithDataAsOrtValueFn = unsafe extern "C" fn(
 ) -> *mut OrtStatus;
 pub type ReleaseValueFn = unsafe extern "C" fn(value: *mut OrtValue);
 pub type GetTensorMutableDataFn = unsafe extern "C" fn(value: *mut OrtValue, out: *mut *mut c_void) -> *mut OrtStatus;
+pub type CreateTensorAsOrtValueFn = unsafe extern "C" fn(
+    allocator: *mut OrtAllocator,
+    shape: *const i64,
+    shape_len: usize,
+    element_type: ONNXTensorElementDataType,
+    out: *mut *mut OrtValue,
+) -> *mut OrtStatus;
 pub type GetTensorTypeAndShapeFn =
     unsafe extern "C" fn(value: *const OrtValue, out: *mut *mut OrtTensorTypeAndShapeInfo) -> *mut OrtStatus;
 pub type ReleaseTensorTypeAndShapeInfoFn = unsafe extern "C" fn(info: *mut OrtTensorTypeAndShapeInfo);
@@ -313,6 +320,7 @@ pub const IDX_GET_ALLOCATOR_WITH_DEFAULT_OPTIONS: usize = 78;
 pub const IDX_SET_SESSION_GRAPH_OPTIMIZATION_LEVEL: usize = 23;
 pub const IDX_SET_INTRA_OP_NUM_THREADS: usize = 24;
 pub const IDX_CREATE_TENSOR_WITH_DATA_AS_ORT_VALUE: usize = 49;
+pub const IDX_CREATE_TENSOR_AS_ORT_VALUE: usize = 50;
 pub const IDX_GET_TENSOR_MUTABLE_DATA: usize = 51;
 pub const IDX_CAST_TYPE_INFO_TO_TENSOR_INFO: usize = 55;
 pub const IDX_GET_DIMENSIONS_COUNT: usize = 61;
@@ -413,6 +421,7 @@ pub struct Onnx {
     pub(crate) release_session: ReleaseSessionFn,
     pub(crate) create_memory_info: CreateCpuMemoryInfoFn,
     pub(crate) create_tensor: CreateTensorWithDataAsOrtValueFn,
+    pub(crate) create_tensor_alloc: CreateTensorAsOrtValueFn,
     pub(crate) release_memory_info: ReleaseMemoryInfoFn,
     pub(crate) get_tensor_type_and_shape: GetTensorTypeAndShapeFn,
     pub(crate) get_tensor_shape_element_count: GetTensorShapeElementCountFn,
@@ -479,6 +488,8 @@ impl Onnx {
         let create_memory_info: CreateCpuMemoryInfoFn = unsafe { (*api).get_fn(IDX_CREATE_CPU_MEMORY_INFO) };
         let create_tensor: CreateTensorWithDataAsOrtValueFn =
             unsafe { (*api).get_fn(IDX_CREATE_TENSOR_WITH_DATA_AS_ORT_VALUE) };
+        let create_tensor_alloc: CreateTensorAsOrtValueFn =
+            unsafe { (*api).get_fn(IDX_CREATE_TENSOR_AS_ORT_VALUE) };
         let release_memory_info: ReleaseMemoryInfoFn = unsafe { (*api).get_fn(IDX_RELEASE_MEMORY_INFO) };
         let get_tensor_type_and_shape: GetTensorTypeAndShapeFn = unsafe { (*api).get_fn(IDX_GET_TENSOR_TYPE_AND_SHAPE) };
         let get_tensor_shape_element_count: GetTensorShapeElementCountFn =
@@ -494,7 +505,7 @@ impl Onnx {
         let release_model_metadata: ReleaseModelMetadataFn = unsafe { (*api).get_fn(IDX_RELEASE_MODEL_METADATA) };
         let log_id = CString::new("onnx").unwrap();
         let mut environment: *mut OrtEnv = null_mut();
-        let status = unsafe { create_env(OrtLoggingLevel::Warning, log_id.as_ptr(), &mut environment as *mut _) };
+        let status = unsafe { create_env(OrtLoggingLevel::Fatal, log_id.as_ptr(), &mut environment as *mut _) };
         if !status.is_null() {
             panic!("Failed to create ONNX runtime environment");
         }
@@ -532,6 +543,7 @@ impl Onnx {
             release_session,
             create_memory_info,
             create_tensor,
+            create_tensor_alloc,
             release_memory_info,
             get_tensor_type_and_shape,
             get_tensor_shape_element_count,
@@ -641,14 +653,9 @@ impl Session {
             panic!("Failed to get input name: {}", self.onnx.status_to_string(status));
         }
 
-        let name = unsafe {
-            CStr::from_ptr(name_ptr)
-                .to_str()
-                .map_err(|_| panic!("Invalid UTF-8 in input name"))
-                .unwrap()
-        };
+        let name = unsafe { CStr::from_ptr(name_ptr).to_string_lossy().into_owned() };
         unsafe { (self.onnx.allocator_free)(self.onnx.allocator, name_ptr as *mut c_void) };
-        name.to_string()
+        name
     }
 
     pub fn output_name(&self, index: usize) -> String {
@@ -659,14 +666,9 @@ impl Session {
             unsafe { (self.onnx.allocator_free)(self.onnx.allocator, name_ptr as *mut c_void) };
             panic!("Failed to get output name: {}", self.onnx.status_to_string(status));
         }
-        let name = unsafe {
-            CStr::from_ptr(name_ptr)
-                .to_str()
-                .map_err(|_| panic!("Invalid UTF-8 in output name"))
-                .unwrap()
-        };
+        let name = unsafe { CStr::from_ptr(name_ptr).to_string_lossy().into_owned() };
         unsafe { (self.onnx.allocator_free)(self.onnx.allocator, name_ptr as *mut c_void) };
-        name.to_string()
+        name
     }
 
     fn get_type_info(&self, index: usize) -> *mut OrtTypeInfo {
@@ -1130,7 +1132,39 @@ impl Value {
         match elem_type {
             ONNXTensorElementDataType::Float => Self::from_slice(&self.onnx, &shape_usize, self.extract_tensor::<f32>()),
             ONNXTensorElementDataType::Int64 => Self::from_slice(&self.onnx, &shape_usize, self.extract_tensor::<i64>()),
-            ONNXTensorElementDataType::Bool => Self::from_slice(&self.onnx, &shape_usize, self.extract_tensor::<bool>()),
+            ONNXTensorElementDataType::Bool => {
+                // CreateTensorWithDataAsOrtValue doesn't support Bool; use allocator-based creation instead
+                let src = self.extract_tensor::<bool>();
+                let mut value: *mut OrtValue = std::ptr::null_mut();
+                let status = unsafe {
+                    (self.onnx.create_tensor_alloc)(
+                        self.onnx.allocator,
+                        shape.as_ptr(),
+                        shape.len(),
+                        ONNXTensorElementDataType::Bool,
+                        &mut value as *mut _,
+                    )
+                };
+                if !status.is_null() {
+                    panic!("Failed to create Bool tensor: {}", self.onnx.status_to_string(status));
+                }
+                let mut data_ptr: *mut c_void = std::ptr::null_mut();
+                let status = unsafe { (self.onnx.get_tensor_mutable_data)(value, &mut data_ptr as *mut _) };
+                if !status.is_null() {
+                    unsafe { (self.onnx.release_value)(value) };
+                    panic!("Failed to get tensor data pointer: {}", self.onnx.status_to_string(status));
+                }
+                if !src.is_empty() {
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(src.as_ptr() as *const u8, data_ptr as *mut u8, src.len());
+                    }
+                }
+                Value {
+                    onnx: Arc::clone(&self.onnx),
+                    value,
+                    _data: Box::new([]),
+                }
+            }
             other => panic!("Unsupported element type {:?} for deepclone", other),
         }
     }
