@@ -84,7 +84,7 @@ async fn main() {
     print!("loading LLM...");
     stdout().flush().unwrap();
     let (llm_handle, mut llm_listener) =
-        llm::create::<LlmPayload>(&onnx, onnx::Executor::Cuda(0), llm::Model::Llama33b, &epoch);
+        slm::create::<LlmPayload>(&onnx, onnx::Executor::Cuda(0), slm::Model::Llama33b, &epoch);
     let llm_handle = Arc::new(llm_handle);
     println!(" done.");
     print!("loading TTS...");
@@ -202,8 +202,8 @@ async fn main() {
                         if !utterance.is_empty() {
                             history.add(history::Role::User(0), utterance.clone()).await;
                             let prompt =
-                                prompt::build(llm::Model::Llama33b, identity, &personality, tools, facts, &history).await;
-                            llm_handle.send(llm::Input {
+                                prompt::build(slm::Model::Llama33b, identity, &personality, tools, facts, &history).await;
+                            llm_handle.send(slm::Input {
                                 payload: LlmPayload {
                                     user_speech_end: payload.user_speech_end,
                                     user_sentence: utterance,
@@ -230,7 +230,7 @@ async fn main() {
             let mut response_id = 0u64;
             loop {
                 match llm_listener.recv().await {
-                    llm::Output::Token { payload, token, stamp } => {
+                    slm::Output::Token { payload, token, stamp } => {
                         if stamp != epoch.current() {
                             current_response.clear();
                             continue;
@@ -260,7 +260,7 @@ async fn main() {
                             }
                         }
                     }
-                    llm::Output::Eos { payload, stamp } => {
+                    slm::Output::Eos { payload, stamp } => {
                         if stamp != epoch.current() {
                             current_response.clear();
                             continue;

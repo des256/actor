@@ -1,4 +1,14 @@
-- Pocket TTS
-- Qwen 2.5
-- rebuild audio pipeline
+- SmolLm 0.5 for tiny LLM
+- optimize prompt
+- user intent analyzer from tiny LLM
+- make LLMs accessible from multiple parallel contexts
+- robot emotional nuance analyzer from main LLM
+- history summarizer from main or tiny LLM
+- high level steering system
+- proactive turn taking (robot speaks first)
+- XML-style inline tagged animation
+- audio-to-viseme
+- speaker diarization
+- implement VLM as main LLM
+- Qwen3 2.5 for main LLM (try)
 - clean up st7789.rs

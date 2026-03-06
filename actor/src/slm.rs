@@ -7,32 +7,32 @@ use {
 
 const MAX_TOKENS: usize = 512;
 
-const PHI3_MODEL_PATH: &str = "data/llm/phi3/model.onnx";
-const PHI3_TOKENIZER_PATH: &str = "data/llm/phi3/tokenizer.json";
+const PHI3_MODEL_PATH: &str = "data/slm/phi3/model.onnx";
+const PHI3_TOKENIZER_PATH: &str = "data/slm/phi3/tokenizer.json";
 const PHI3_EOS_TOKENS: &[u32] = &[32000, 32001, 32007];
 const PHI3_NUM_KV_HEADS: usize = 32;
 const PHI3_HEAD_DIM: usize = 96;
 
-const LLAMA3_3B_MODEL_PATH: &str = "data/llm/llama3_3b/model.onnx";
-const LLAMA3_3B_TOKENIZER_PATH: &str = "data/llm/llama3_3b/tokenizer.json";
+const LLAMA3_3B_MODEL_PATH: &str = "data/slm/llama3_3b/model.onnx";
+const LLAMA3_3B_TOKENIZER_PATH: &str = "data/slm/llama3_3b/tokenizer.json";
 const LLAMA3_3B_EOS_TOKENS: &[u32] = &[128001, 128009];
 const LLAMA3_3B_NUM_KV_HEADS: usize = 8;
 const LLAMA3_3B_HEAD_DIM: usize = 128;
 
-const LLAMA3_8B_MODEL_PATH: &str = "data/llm/llama3_8b/model.onnx";
-const LLAMA3_8B_TOKENIZER_PATH: &str = "data/llm/llama3_8b/tokenizer.json";
+const LLAMA3_8B_MODEL_PATH: &str = "data/slm/llama3_8b/model.onnx";
+const LLAMA3_8B_TOKENIZER_PATH: &str = "data/slm/llama3_8b/tokenizer.json";
 const LLAMA3_8B_EOS_TOKENS: &[u32] = &[128001, 128009];
 const LLAMA3_8B_NUM_KV_HEADS: usize = 8;
 const LLAMA3_8B_HEAD_DIM: usize = 128;
 
-const GEMMA3_4B_MODEL_PATH: &str = "data/llm/gemma3_4b/gemma-3-text.onnx";
-const GEMMA3_4B_TOKENIZER_PATH: &str = "data/llm/gemma3_4b/tokenizer.json";
+const GEMMA3_4B_MODEL_PATH: &str = "data/slm/gemma3_4b/gemma-3-text.onnx";
+const GEMMA3_4B_TOKENIZER_PATH: &str = "data/slm/gemma3_4b/tokenizer.json";
 const GEMMA3_4B_EOS_TOKENS: &[u32] = &[1, 106];
 const GEMMA3_4B_NUM_KV_HEADS: usize = 4;
 const GEMMA3_4B_HEAD_DIM: usize = 256;
 
-const SMOLLM3_MODEL_PATH: &str = "data/llm/smollm3/model_q4f16.onnx";
-const SMOLLM3_TOKENIZER_PATH: &str = "data/llm/smollm3/tokenizer.json";
+const SMOLLM3_MODEL_PATH: &str = "data/slm/smollm3/model_q4f16.onnx";
+const SMOLLM3_TOKENIZER_PATH: &str = "data/slm/smollm3/tokenizer.json";
 const SMOLLM3_EOS_TOKENS: &[u32] = &[128012];
 const SMOLLM3_NUM_KV_HEADS: usize = 4;
 const SMOLLM3_HEAD_DIM: usize = 128;
@@ -122,7 +122,7 @@ pub fn create<T: Clone + Send + 'static>(
     let tokenizer = match Tokenizer::from_file(tokenizer_path) {
         Ok(tokenizer) => tokenizer,
         Err(error) => {
-            panic!("Llm: failed to load tokenizer: {}", error);
+            panic!("Slm: failed to load tokenizer: {}", error);
         }
     };
     let tokenizer = Arc::new(tokenizer);
@@ -147,7 +147,7 @@ pub fn create<T: Clone + Send + 'static>(
             let kv_key_count = input_names.iter().filter(|name| name.contains(".key")).count();
             let kv_value_count = input_names.iter().filter(|name| name.contains(".value")).count();
             if kv_key_count != kv_value_count {
-                panic!("Llm: KV key and value count mismatch");
+                panic!("Slm: KV key and value count mismatch");
             }
             let first_kv_idx = input_names
                 .iter()
@@ -166,7 +166,7 @@ pub fn create<T: Clone + Send + 'static>(
                 let encoding = match tokenizer.encode(input.prompt.as_str(), false) {
                     Ok(encoding) => encoding,
                     Err(error) => {
-                        panic!("Llm: failed to tokenize prompt: {}", error);
+                        panic!("Slm: failed to tokenize prompt: {}", error);
                     }
                 };
                 let tokens = encoding.get_ids().to_vec();
@@ -217,7 +217,7 @@ pub fn create<T: Clone + Send + 'static>(
                             if let Some(cache_position_tensor) = &cache_position_tensor {
                                 inputs.push((name.as_str(), &cache_position_tensor));
                             } else {
-                                panic!("Llm: cache position tensor only supported for Gemma3 (4b)");
+                                panic!("Slm: cache position tensor only supported for Gemma3 (4b)");
                             }
                         } else {
                             let idx_str = name.strip_prefix("past_key_values.").unwrap();
@@ -226,7 +226,7 @@ pub fn create<T: Clone + Send + 'static>(
                             let cache_idx = match &idx_str[dot_pos + 1..] {
                                 "key" => layer * 2,
                                 "value" => layer * 2 + 1,
-                                _ => panic!("Llm: invalid KV cache index: {}", idx_str),
+                                _ => panic!("Slm: invalid KV cache index: {}", idx_str),
                             };
                             if cache_idx < kv_cache.len() {
                                 inputs.push((name.as_str(), &kv_cache[cache_idx]));
@@ -234,7 +234,7 @@ pub fn create<T: Clone + Send + 'static>(
                         }
                     }
                     if inputs.len() != input_names.len() {
-                        panic!("Llm: missing input tensors");
+                        panic!("Slm: missing input tensors");
                     }
 
                     // run model
@@ -251,13 +251,13 @@ pub fn create<T: Clone + Send + 'static>(
                     let logits_data = outputs[logits_idx].extract_as_f32();
                     let seq_len = input_ids.len();
                     if (seq_len == 0) || logits_data.is_empty() {
-                        panic!("Llm: invalid logits");
+                        panic!("Slm: invalid logits");
                     }
                     let vocab_size = logits_data.len() / seq_len;
                     let last_pos_offset = (seq_len - 1) * vocab_size;
                     if last_pos_offset + vocab_size > logits_data.len() {
                         panic!(
-                            "Llm: logits shape mismatch, expected {} but got {}",
+                            "Slm: logits shape mismatch, expected {} but got {}",
                             last_pos_offset + vocab_size,
                             logits_data.len()
                         );
@@ -271,7 +271,7 @@ pub fn create<T: Clone + Send + 'static>(
                     {
                         Some(id) => id,
                         None => {
-                            panic!("Llm: no valid logits found");
+                            panic!("Slm: no valid logits found");
                         }
                     };
 
@@ -293,7 +293,7 @@ pub fn create<T: Clone + Send + 'static>(
                     let full_decoded = match tokenizer.decode(&generated_tokens, true) {
                         Ok(decoded) => decoded,
                         Err(error) => {
-                            panic!("Llm: failed to decode entire sequence: {}", error);
+                            panic!("Slm: failed to decode entire sequence: {}", error);
                         }
                     };
                     if full_decoded.len() > prev_decoded_len {
@@ -304,7 +304,7 @@ pub fn create<T: Clone + Send + 'static>(
                             token: delta.to_string(),
                             stamp: epoch.current(),
                         }) {
-                            panic!("Llm: failed to send token: {}", error);
+                            panic!("Slm: failed to send token: {}", error);
                         }
                     }
 
@@ -343,7 +343,7 @@ impl<T: Clone + Send + 'static> Listener<T> {
             Ok(output) => Some(output),
             Err(tokio_mpsc::error::TryRecvError::Empty) => None,
             Err(tokio_mpsc::error::TryRecvError::Disconnected) => {
-                panic!("Llm: output channel disconnected")
+                panic!("Slm: output channel disconnected")
             }
         }
     }

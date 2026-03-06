@@ -1,4 +1,5 @@
 silero_vad.onnx
 asr/
-llm/
+slm/
+xslm/
 tts/

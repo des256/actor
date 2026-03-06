@@ -7,7 +7,7 @@ use super::*;
 // 5. main setup with recap
 
 pub async fn build(
-    model: llm::Model,
+    model: slm::Model,
     identity: &str,
     personality: &str,
     tools: &str,
@@ -16,7 +16,7 @@ pub async fn build(
 ) -> String {
     let (summary, history) = history.summarize(5).await;
     match model {
-        llm::Model::Phi3 => {
+        slm::Model::Phi3 => {
             let mut short_history = String::new();
             for (role, message) in history.iter() {
                 let role = match role {
@@ -30,7 +30,7 @@ pub async fn build(
                 identity, personality, tools, facts, summary, short_history,
             )
         }
-        llm::Model::Llama33b | llm::Model::Llama38b => {
+        slm::Model::Llama33b | slm::Model::Llama38b => {
             let mut short_history = String::new();
             for (role, message) in history.iter() {
                 let role = match role {
@@ -47,7 +47,7 @@ pub async fn build(
                 identity, personality, tools, facts, summary, short_history,
             )
         }
-        llm::Model::Gemma34b => {
+        slm::Model::Gemma34b => {
             let mut short_history = String::new();
             for (role, message) in history.iter() {
                 let role = match role {
@@ -61,7 +61,7 @@ pub async fn build(
                 identity, personality, tools, facts, summary, short_history,
             )
         }
-        llm::Model::Smollm3 => {
+        slm::Model::Smollm3 => {
             let mut short_history = String::new();
             for (role, message) in history.iter() {
                 let role = match role {
