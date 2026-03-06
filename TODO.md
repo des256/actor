@@ -2,6 +2,7 @@
 
   --> A solution might be to parallelize intent analysis next to the main LLM, but I'm not sure that will help on the Jetson...
 
+- moonshine ASR, include various sizes
 - history summarizer, but only call it in spare time
 - high level steering system
 - proactive turn taking (robot speaks first)
