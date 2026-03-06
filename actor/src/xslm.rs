@@ -5,89 +5,31 @@ use {
     tokio::sync::mpsc as tokio_mpsc,
 };
 
-const PHI3_MODEL_PATH: &str = "data/slm/phi3/model.onnx";
-const PHI3_TOKENIZER_PATH: &str = "data/slm/phi3/tokenizer.json";
-const PHI3_EOS_TOKENS: &[u32] = &[32000, 32001, 32007];
-const PHI3_NUM_KV_HEADS: usize = 32;
-const PHI3_HEAD_DIM: usize = 96;
+const MAX_TOKENS: usize = 512;
 
-const LLAMA3_3B_MODEL_PATH: &str = "data/slm/llama3_3b/model.onnx";
-const LLAMA3_3B_TOKENIZER_PATH: &str = "data/slm/llama3_3b/tokenizer.json";
-const LLAMA3_3B_EOS_TOKENS: &[u32] = &[128001, 128009];
-const LLAMA3_3B_NUM_KV_HEADS: usize = 8;
-const LLAMA3_3B_HEAD_DIM: usize = 128;
-
-const LLAMA3_8B_MODEL_PATH: &str = "data/slm/llama3_8b/model.onnx";
-const LLAMA3_8B_TOKENIZER_PATH: &str = "data/slm/llama3_8b/tokenizer.json";
-const LLAMA3_8B_EOS_TOKENS: &[u32] = &[128001, 128009];
-const LLAMA3_8B_NUM_KV_HEADS: usize = 8;
-const LLAMA3_8B_HEAD_DIM: usize = 128;
-
-const GEMMA3_4B_MODEL_PATH: &str = "data/slm/gemma3_4b/gemma-3-text.onnx";
-const GEMMA3_4B_TOKENIZER_PATH: &str = "data/slm/gemma3_4b/tokenizer.json";
-const GEMMA3_4B_EOS_TOKENS: &[u32] = &[1, 106];
-const GEMMA3_4B_NUM_KV_HEADS: usize = 4;
-const GEMMA3_4B_HEAD_DIM: usize = 256;
-
-const SMOLLM3_MODEL_PATH: &str = "data/slm/smollm3/model_q4f16.onnx";
-const SMOLLM3_TOKENIZER_PATH: &str = "data/slm/smollm3/tokenizer.json";
-const SMOLLM3_EOS_TOKENS: &[u32] = &[128012];
-const SMOLLM3_NUM_KV_HEADS: usize = 4;
-const SMOLLM3_HEAD_DIM: usize = 128;
+const SMOLLM2_360M_MODEL_PATH: &str = "data/xslm/smollm2_360m/model_q4f16.onnx";
+const SMOLLM2_360M_TOKENIZER_PATH: &str = "data/xslm/smollm2_360m/tokenizer.json";
+const SMOLLM2_360M_EOS_TOKENS: &[u32] = &[0, 2];
+const SMOLLM2_360M_NUM_KV_HEADS: usize = 5;
+const SMOLLM2_360M_HEAD_DIM: usize = 64;
 
 const CHANNEL_CAPACITY: usize = 64;
 
 #[derive(Clone, Copy)]
 pub enum Model {
-    Phi3,
-    Llama33b, // absolute winner!
-    Llama38b,
-    Gemma34b, // greedy decode might not work properly here, resulting in rambling on
-    Smollm3,  // seems very nice, but tends to <think>
+    Smollm2360m,
 }
 
 #[derive(Clone)]
 pub struct Input<T: Clone + Send + 'static> {
     pub payload: T,
     pub prompt: String,
-    pub max_tokens: usize,
     pub stamp: u64,
 }
 
 pub enum Output<T: Clone + Send + 'static> {
     Token { payload: T, token: String, stamp: u64 },
     Eos { payload: T, stamp: u64 },
-}
-
-pub struct Core {
-    pub model: Model,
-    pub session: onnx::Session,
-    pub tokenizer: Arc<Tokenizer>,
-}
-
-impl Core {
-    pub fn new(onnx: &Arc<onnx::Onnx>, executor: onnx::Executor, model: Model) -> Self {
-        let (model_path, tokenizer_path) = match model {
-            Model::Phi3 => (PHI3_MODEL_PATH, PHI3_TOKENIZER_PATH),
-            Model::Llama33b => (LLAMA3_3B_MODEL_PATH, LLAMA3_3B_TOKENIZER_PATH),
-            Model::Llama38b => (LLAMA3_8B_MODEL_PATH, LLAMA3_8B_TOKENIZER_PATH),
-            Model::Gemma34b => (GEMMA3_4B_MODEL_PATH, GEMMA3_4B_TOKENIZER_PATH),
-            Model::Smollm3 => (SMOLLM3_MODEL_PATH, SMOLLM3_TOKENIZER_PATH),
-        };
-        let session = onnx.create_session(executor, onnx::OptimizationLevel::EnableAll, 4, model_path);
-        let tokenizer = match Tokenizer::from_file(tokenizer_path) {
-            Ok(tokenizer) => tokenizer,
-            Err(error) => {
-                panic!("Slm: failed to load tokenizer: {}", error);
-            }
-        };
-        let tokenizer = Arc::new(tokenizer);
-        Self {
-            model,
-            session,
-            tokenizer,
-        }
-    }
 }
 
 pub struct Handle<T: Clone + Send + 'static> {
@@ -98,48 +40,64 @@ pub struct Listener<T: Clone + Send + 'static> {
     rx: tokio_mpsc::Receiver<Output<T>>,
 }
 
-pub fn create<T: Clone + Send + 'static>(core: &Arc<Core>, epoch: &Arc<Epoch>) -> (Handle<T>, Listener<T>) {
+pub fn create<T: Clone + Send + 'static>(
+    onnx: &Arc<onnx::Onnx>,
+    executor: onnx::Executor,
+    model: Model,
+    epoch: &Arc<Epoch>,
+) -> (Handle<T>, Listener<T>) {
     // create channels
     let (input_tx, input_rx) = std_mpsc::channel::<Input<T>>();
     let (output_tx, output_rx) = tokio_mpsc::channel::<Output<T>>(CHANNEL_CAPACITY);
 
     // get model-specific parameters
-    let (eos_tokens, num_kv_heads, head_dim) = match core.model {
-        Model::Phi3 => (PHI3_EOS_TOKENS, PHI3_NUM_KV_HEADS, PHI3_HEAD_DIM),
-        Model::Llama33b => (LLAMA3_3B_EOS_TOKENS, LLAMA3_3B_NUM_KV_HEADS, LLAMA3_3B_HEAD_DIM),
-        Model::Llama38b => (LLAMA3_8B_EOS_TOKENS, LLAMA3_8B_NUM_KV_HEADS, LLAMA3_8B_HEAD_DIM),
-        Model::Gemma34b => (GEMMA3_4B_EOS_TOKENS, GEMMA3_4B_NUM_KV_HEADS, GEMMA3_4B_HEAD_DIM),
-        Model::Smollm3 => (SMOLLM3_EOS_TOKENS, SMOLLM3_NUM_KV_HEADS, SMOLLM3_HEAD_DIM),
+    let (model_path, tokenizer_path, eos_tokens, num_kv_heads, head_dim) = match model {
+        Model::Smollm2360m => (
+            SMOLLM2_360M_MODEL_PATH,
+            SMOLLM2_360M_TOKENIZER_PATH,
+            SMOLLM2_360M_EOS_TOKENS,
+            SMOLLM2_360M_NUM_KV_HEADS,
+            SMOLLM2_360M_HEAD_DIM,
+        ),
     };
+
+    // load models
+    let mut session = onnx.create_session(executor, onnx::OptimizationLevel::EnableAll, 4, model_path);
+    let tokenizer = match Tokenizer::from_file(tokenizer_path) {
+        Ok(tokenizer) => tokenizer,
+        Err(error) => {
+            panic!("Xslm: failed to load tokenizer: {}", error);
+        }
+    };
+    let tokenizer = Arc::new(tokenizer);
 
     // start prompt pump
     std::thread::spawn({
-        let core = Arc::clone(&core);
         let epoch = Arc::clone(&epoch);
         move || {
             // extract input names
             let mut input_names = Vec::<String>::new();
-            for i in 0..core.session.input_count() {
-                input_names.push(core.session.input_name(i));
+            for i in 0..session.input_count() {
+                input_names.push(session.input_name(i));
             }
 
             // extract output names
             let mut output_names = Vec::<String>::new();
-            for i in 0..core.session.output_count() {
-                output_names.push(core.session.output_name(i));
+            for i in 0..session.output_count() {
+                output_names.push(session.output_name(i));
             }
 
             // count KV keys from input names
             let kv_key_count = input_names.iter().filter(|name| name.contains(".key")).count();
             let kv_value_count = input_names.iter().filter(|name| name.contains(".value")).count();
             if kv_key_count != kv_value_count {
-                panic!("Slm: KV key and value count mismatch");
+                panic!("Xslm: KV key and value count mismatch");
             }
             let first_kv_idx = input_names
                 .iter()
                 .position(|name| name.contains(".key") || name.contains(".value"))
                 .unwrap();
-            let kv_dtype = core.session.input_element_type(first_kv_idx);
+            let kv_dtype = session.input_element_type(first_kv_idx);
 
             // prompt pump
             while let Ok(input) = input_rx.recv() {
@@ -149,10 +107,10 @@ pub fn create<T: Clone + Send + 'static>(core: &Arc<Core>, epoch: &Arc<Epoch>) -
                 }
 
                 // tokenize prompt
-                let encoding = match core.tokenizer.encode(input.prompt.as_str(), false) {
+                let encoding = match tokenizer.encode(input.prompt.as_str(), false) {
                     Ok(encoding) => encoding,
                     Err(error) => {
-                        panic!("Slm: failed to tokenize prompt: {}", error);
+                        panic!("Xslm: failed to tokenize prompt: {}", error);
                     }
                 };
                 let tokens = encoding.get_ids().to_vec();
@@ -173,31 +131,19 @@ pub fn create<T: Clone + Send + 'static>(core: &Arc<Core>, epoch: &Arc<Epoch>) -
                 let mut kv_cache: Vec<onnx::Value> = Vec::with_capacity(kv_key_count * 2);
                 for _ in 0..kv_key_count * 2 {
                     kv_cache.push(onnx::Value::empty_typed(
-                        &core.session.onnx,
+                        &session.onnx,
                         &[1, num_kv_heads, 0, head_dim],
                         kv_dtype,
                     ));
                 }
 
                 // generate tokens
-                let mut eos_sent = false;
-                for _ in 0..input.max_tokens {
+                for _ in 0..MAX_TOKENS {
                     // build input tensors
-                    let input_ids_tensor =
-                        onnx::Value::from_slice::<i64>(&core.session.onnx, &[1, input_ids.len()], &input_ids);
+                    let input_ids_tensor = onnx::Value::from_slice::<i64>(&session.onnx, &[1, input_ids.len()], &input_ids);
                     let attention_mask_tensor =
-                        onnx::Value::from_slice::<i64>(&core.session.onnx, &[1, attention_mask.len()], &attention_mask);
-                    let positions_tensor =
-                        onnx::Value::from_slice::<i64>(&core.session.onnx, &[1, positions.len()], &positions);
-                    let cache_position_tensor = if let Model::Gemma34b = core.model {
-                        Some(onnx::Value::from_slice::<i64>(
-                            &core.session.onnx,
-                            &[positions.len()],
-                            &positions,
-                        ))
-                    } else {
-                        None
-                    };
+                        onnx::Value::from_slice::<i64>(&session.onnx, &[1, attention_mask.len()], &attention_mask);
+                    let positions_tensor = onnx::Value::from_slice::<i64>(&session.onnx, &[1, positions.len()], &positions);
                     let mut inputs = Vec::with_capacity(3 + kv_cache.len());
                     for name in &input_names {
                         if name == "input_ids" {
@@ -206,12 +152,6 @@ pub fn create<T: Clone + Send + 'static>(core: &Arc<Core>, epoch: &Arc<Epoch>) -
                             inputs.push((name.as_str(), &attention_mask_tensor));
                         } else if name == "position_ids" {
                             inputs.push((name.as_str(), &positions_tensor));
-                        } else if name == "cache_position" {
-                            if let Some(cache_position_tensor) = &cache_position_tensor {
-                                inputs.push((name.as_str(), &cache_position_tensor));
-                            } else {
-                                panic!("Slm: cache position tensor only supported for Gemma3 (4b)");
-                            }
                         } else {
                             let idx_str = name.strip_prefix("past_key_values.").unwrap();
                             let dot_pos = idx_str.find('.').unwrap();
@@ -219,7 +159,7 @@ pub fn create<T: Clone + Send + 'static>(core: &Arc<Core>, epoch: &Arc<Epoch>) -
                             let cache_idx = match &idx_str[dot_pos + 1..] {
                                 "key" => layer * 2,
                                 "value" => layer * 2 + 1,
-                                _ => panic!("Slm: invalid KV cache index: {}", idx_str),
+                                _ => panic!("Xslm: invalid KV cache index: {}", idx_str),
                             };
                             if cache_idx < kv_cache.len() {
                                 inputs.push((name.as_str(), &kv_cache[cache_idx]));
@@ -227,12 +167,12 @@ pub fn create<T: Clone + Send + 'static>(core: &Arc<Core>, epoch: &Arc<Epoch>) -
                         }
                     }
                     if inputs.len() != input_names.len() {
-                        panic!("Slm: missing input tensors");
+                        panic!("Xslm: missing input tensors");
                     }
 
                     // run model
                     let output_refs = output_names.iter().map(|name| name.as_str()).collect::<Vec<_>>();
-                    let outputs = core.session.run(&inputs, &output_refs);
+                    let outputs = session.run(&inputs, &output_refs);
 
                     // exit if stale
                     if !epoch.is_current(input.stamp) {
@@ -244,13 +184,13 @@ pub fn create<T: Clone + Send + 'static>(core: &Arc<Core>, epoch: &Arc<Epoch>) -
                     let logits_data = outputs[logits_idx].extract_as_f32();
                     let seq_len = input_ids.len();
                     if (seq_len == 0) || logits_data.is_empty() {
-                        panic!("Slm: invalid logits");
+                        panic!("Xslm: invalid logits");
                     }
                     let vocab_size = logits_data.len() / seq_len;
                     let last_pos_offset = (seq_len - 1) * vocab_size;
                     if last_pos_offset + vocab_size > logits_data.len() {
                         panic!(
-                            "Slm: logits shape mismatch, expected {} but got {}",
+                            "Xslm: logits shape mismatch, expected {} but got {}",
                             last_pos_offset + vocab_size,
                             logits_data.len()
                         );
@@ -264,7 +204,7 @@ pub fn create<T: Clone + Send + 'static>(core: &Arc<Core>, epoch: &Arc<Epoch>) -
                     {
                         Some(id) => id,
                         None => {
-                            panic!("Slm: no valid logits found");
+                            panic!("Xslm: no valid logits found");
                         }
                     };
 
@@ -273,10 +213,9 @@ pub fn create<T: Clone + Send + 'static>(core: &Arc<Core>, epoch: &Arc<Epoch>) -
                         output_tx
                             .blocking_send(Output::Eos {
                                 payload: input.payload.clone(),
-                                stamp: input.stamp,
+                                stamp: epoch.current(),
                             })
                             .unwrap();
-                        eos_sent = true;
                         break;
                     }
 
@@ -284,10 +223,10 @@ pub fn create<T: Clone + Send + 'static>(core: &Arc<Core>, epoch: &Arc<Epoch>) -
                     generated_tokens.push(next_token as u32);
 
                     // decode entire sequence to output new part as token
-                    let full_decoded = match core.tokenizer.decode(&generated_tokens, true) {
+                    let full_decoded = match tokenizer.decode(&generated_tokens, true) {
                         Ok(decoded) => decoded,
                         Err(error) => {
-                            panic!("Slm: failed to decode entire sequence: {}", error);
+                            panic!("Xslm: failed to decode entire sequence: {}", error);
                         }
                     };
                     if full_decoded.len() > prev_decoded_len {
@@ -296,9 +235,9 @@ pub fn create<T: Clone + Send + 'static>(core: &Arc<Core>, epoch: &Arc<Epoch>) -
                         if let Err(error) = output_tx.blocking_send(Output::Token {
                             payload: input.payload.clone(),
                             token: delta.to_string(),
-                            stamp: input.stamp,
+                            stamp: epoch.current(),
                         }) {
-                            panic!("Slm: failed to send token: {}", error);
+                            panic!("Xslm: failed to send token: {}", error);
                         }
                     }
 
@@ -314,16 +253,6 @@ pub fn create<T: Clone + Send + 'static>(core: &Arc<Core>, epoch: &Arc<Epoch>) -
                     input_ids = vec![next_token as i64];
                     attention_mask.push(1);
                     positions = vec![attention_mask.len() as i64 - 1];
-                }
-
-                // send EOS if no EOS was sent already
-                if !eos_sent {
-                    if let Err(error) = output_tx.blocking_send(Output::Eos {
-                        payload: input.payload.clone(),
-                        stamp: input.stamp,
-                    }) {
-                        panic!("Slm: failed to send EOS: {}", error);
-                    }
                 }
             }
         }
@@ -347,7 +276,7 @@ impl<T: Clone + Send + 'static> Listener<T> {
             Ok(output) => Some(output),
             Err(tokio_mpsc::error::TryRecvError::Empty) => None,
             Err(tokio_mpsc::error::TryRecvError::Disconnected) => {
-                panic!("Slm: output channel disconnected")
+                panic!("Xslm: output channel disconnected")
             }
         }
     }

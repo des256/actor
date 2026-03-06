@@ -488,8 +488,7 @@ impl Onnx {
         let create_memory_info: CreateCpuMemoryInfoFn = unsafe { (*api).get_fn(IDX_CREATE_CPU_MEMORY_INFO) };
         let create_tensor: CreateTensorWithDataAsOrtValueFn =
             unsafe { (*api).get_fn(IDX_CREATE_TENSOR_WITH_DATA_AS_ORT_VALUE) };
-        let create_tensor_alloc: CreateTensorAsOrtValueFn =
-            unsafe { (*api).get_fn(IDX_CREATE_TENSOR_AS_ORT_VALUE) };
+        let create_tensor_alloc: CreateTensorAsOrtValueFn = unsafe { (*api).get_fn(IDX_CREATE_TENSOR_AS_ORT_VALUE) };
         let release_memory_info: ReleaseMemoryInfoFn = unsafe { (*api).get_fn(IDX_RELEASE_MEMORY_INFO) };
         let get_tensor_type_and_shape: GetTensorTypeAndShapeFn = unsafe { (*api).get_fn(IDX_GET_TENSOR_TYPE_AND_SHAPE) };
         let get_tensor_shape_element_count: GetTensorShapeElementCountFn =
@@ -801,7 +800,7 @@ impl Session {
         map
     }
 
-    pub fn run(&mut self, inputs: &[(&str, &Value)], output_names: &[&str]) -> Vec<Value> {
+    pub fn run(&self, inputs: &[(&str, &Value)], output_names: &[&str]) -> Vec<Value> {
         let input_name_cstrings: Vec<CString> = inputs
             .iter()
             .map(|(name, _)| match CString::new(*name) {

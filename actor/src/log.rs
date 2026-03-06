@@ -141,25 +141,25 @@ pub fn init_file_logger(path: impl Into<PathBuf>) {
 
 #[macro_export]
 macro_rules! log_debug {
-    ($($arg:tt)*) => {{ let message = format_args!($($arg)*).to_string(); if let Some(logger) = base::log::LOGGER.lock().unwrap_or_else(|e| e.into_inner()).as_ref() { logger.log(base::log::Level::Debug, file!(), line!() as usize, &message); } }};
+    ($($arg:tt)*) => {{ let message = format_args!($($arg)*).to_string(); if let Some(logger) = LOGGER.lock().unwrap_or_else(|e| e.into_inner()).as_ref() { logger.log(Level::Debug, file!(), line!() as usize, &message); } }};
 }
 
 #[macro_export]
 macro_rules! log_info {
-    ($($arg:tt)*) => {{ let message = format_args!($($arg)*).to_string(); if let Some(logger) = base::log::LOGGER.lock().unwrap_or_else(|e| e.into_inner()).as_ref() { logger.log(base::log::Level::Info, file!(), line!() as usize, &message); } }};
+    ($($arg:tt)*) => {{ let message = format_args!($($arg)*).to_string(); if let Some(logger) = LOGGER.lock().unwrap_or_else(|e| e.into_inner()).as_ref() { logger.log(Level::Info, file!(), line!() as usize, &message); } }};
 }
 
 #[macro_export]
 macro_rules! log_warn {
-    ($($arg:tt)*) => {{ let message = format_args!($($arg)*).to_string(); if let Some(logger) = base::log::LOGGER.lock().unwrap_or_else(|e| e.into_inner()).as_ref() { logger.log(base::log::Level::Warn, file!(), line!() as usize, &message); } }};
+    ($($arg:tt)*) => {{ let message = format_args!($($arg)*).to_string(); if let Some(logger) = LOGGER.lock().unwrap_or_else(|e| e.into_inner()).as_ref() { logger.log(Level::Warn, file!(), line!() as usize, &message); } }};
 }
 
 #[macro_export]
 macro_rules! log_error {
-    ($($arg:tt)*) => {{ let message = format_args!($($arg)*).to_string(); if let Some(logger) = base::log::LOGGER.lock().unwrap_or_else(|e| e.into_inner()).as_ref() { logger.log(base::log::Level::Error, file!(), line!() as usize, &message); } }};
+    ($($arg:tt)*) => {{ let message = format_args!($($arg)*).to_string(); if let Some(logger) = LOGGER.lock().unwrap_or_else(|e| e.into_inner()).as_ref() { logger.log(Level::Error, file!(), line!() as usize, &message); } }};
 }
 
 #[macro_export]
 macro_rules! log_fatal {
-    ($($arg:tt)*) => {{ let message = format_args!($($arg)*).to_string(); if let Some(logger) = base::log::LOGGER.lock().unwrap_or_else(|e| e.into_inner()).as_ref() { logger.log(base::log::Level::Fatal, file!(), line!() as usize, &message); } println!("FATAL ERROR: {}", message); std::process::exit(1); }};
+    ($($arg:tt)*) => {{ let message = format_args!($($arg)*).to_string(); if let Some(logger) = LOGGER.lock().unwrap_or_else(|e| e.into_inner()).as_ref() { logger.log(Level::Fatal, file!(), line!() as usize, &message); } println!("FATAL ERROR: {}", message); std::process::exit(1); }};
 }

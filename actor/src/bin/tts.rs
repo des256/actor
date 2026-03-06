@@ -1,6 +1,6 @@
 use {actor::*, std::sync::Arc};
 
-const VOICE_PATH: &str = "data/tts/voices/hannah.bin";
+const VOICE_PATH: &str = "data/tts/voices/desmond-sarcastic.bin";
 const TTS_SAMPLE_RATE: usize = 24000;
 const TTS_CHUNK_SIZE: usize = 512;
 

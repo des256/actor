@@ -24,6 +24,7 @@ pub struct Output<T: Clone + Send + 'static> {
     pub audio: Vec<i16>,
     pub index: usize,
     pub last: bool,
+    pub stamp: u64,
 }
 
 mod tts;

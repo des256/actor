@@ -1,9 +1,8 @@
-- SmolLm 0.5 for tiny LLM
-- optimize prompt
-- user intent analyzer from tiny LLM
-- make LLMs accessible from multiple parallel contexts
-- robot emotional nuance analyzer from main LLM
-- history summarizer from main or tiny LLM
+- 3x LLM inference is slower on Jetson (thinking time around 3s)... On desktop (RTX4080 SUPER) it's around 500ms
+
+  --> A solution might be to parallelize intent analysis next to the main LLM, but I'm not sure that will help on the Jetson...
+
+- history summarizer, but only call it in spare time
 - high level steering system
 - proactive turn taking (robot speaks first)
 - XML-style inline tagged animation

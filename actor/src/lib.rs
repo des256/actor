@@ -21,3 +21,4 @@ pub mod slm;
 pub mod tts;
 pub mod vad;
 pub mod wsserver;
+pub mod xslm;

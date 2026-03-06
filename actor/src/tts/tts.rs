@@ -98,6 +98,7 @@ pub fn create<T: Clone + Send + 'static>(
                         audio,
                         index: current_index,
                         last: is_last,
+                        stamp: input.stamp,
                     }) {
                         panic!("Tts: failed to send output: {}", error);
                     }
