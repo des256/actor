@@ -16,8 +16,8 @@ pub struct Listener<T: Clone + Send + 'static> {
 
 pub fn create<T: Clone + Send + 'static>(onnx: &Arc<onnx::Onnx>, executor: onnx::Executor) -> (Handle<T>, Listener<T>) {
     // create channels
-    let (input_tx, input_rx) = std_mpsc::channel::<asr::Input<T>>();
-    let (output_tx, output_rx) = tokio_mpsc::channel::<asr::Output<T>>(CHANNEL_CAPACITY);
+    let (input_tx, input_rx) = std_mpsc::channel::<parakeet::Input<T>>();
+    let (output_tx, output_rx) = tokio_mpsc::channel::<parakeet::Output<T>>(CHANNEL_CAPACITY);
 
     // load models
     let mut feature_extractor = FeatureExtractor::new();
@@ -80,7 +80,7 @@ pub fn create<T: Clone + Send + 'static>(onnx: &Arc<onnx::Onnx>, executor: onnx:
                     // add to accumulator and send as partial output
                     if text.chars().any(|c| c.is_alphanumeric()) {
                         accumulator.push_str(&text);
-                        if let Err(error) = output_tx.blocking_send(asr::Output::<T>::Partial {
+                        if let Err(error) = output_tx.blocking_send(parakeet::Output::<T>::Partial {
                             payload: input.payload.clone(),
                             utterance: accumulator.clone(),
                         }) {
@@ -91,7 +91,7 @@ pub fn create<T: Clone + Send + 'static>(onnx: &Arc<onnx::Onnx>, executor: onnx:
 
                 // when flushing, send final output and reset everything
                 if input.flush {
-                    if let Err(error) = output_tx.blocking_send(asr::Output::<T>::Final {
+                    if let Err(error) = output_tx.blocking_send(parakeet::Output::<T>::Final {
                         payload: input.payload.clone(),
                         utterance: accumulator.clone(),
                     }) {

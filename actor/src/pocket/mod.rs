@@ -1,10 +1,10 @@
 use crate::*;
 
-const CONDITIONER_PATH: &str = "data/tts/text_conditioner.onnx";
-const FLOW_MAIN_PATH: &str = "data/tts/flow_lm_main_int8.onnx";
-const FLOW_STEP_PATH: &str = "data/tts/flow_lm_flow_int8.onnx";
-const DECODER_PATH: &str = "data/tts/mimi_decoder_int8.onnx";
-const TOKENIZER_PATH: &str = "data/tts/tokenizer.json";
+const CONDITIONER_PATH: &str = "data/pocket/text_conditioner.onnx";
+const FLOW_MAIN_PATH: &str = "data/pocket/flow_lm_main_int8.onnx";
+const FLOW_STEP_PATH: &str = "data/pocket/flow_lm_flow_int8.onnx";
+const DECODER_PATH: &str = "data/pocket/mimi_decoder_int8.onnx";
+const TOKENIZER_PATH: &str = "data/pocket/tokenizer.json";
 
 const MAX_TOKENS: usize = 1000;
 const LATENT_DIM: usize = 32;
@@ -27,8 +27,8 @@ pub struct Output<T: Clone + Send + 'static> {
     pub stamp: u64,
 }
 
-mod tts;
-pub use tts::*;
+mod pocket;
+pub use pocket::*;
 
 mod tokenizer;
 use tokenizer::*;

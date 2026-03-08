@@ -18,7 +18,7 @@ async fn main() {
     let mut audioin_listener = audioin::create(ASR_SAMPLE_RATE, VAD_FRAMES_PER_CHUNK * VAD_FRAME_SIZE, None, 3);
     let onnx = onnx::Onnx::new(17);
     let mut vad = vad::Vad::new(&onnx, onnx::Executor::Cpu, ASR_SAMPLE_RATE);
-    let (asr_handle, mut asr_listener) = asr::create::<()>(&onnx, onnx::Executor::Cuda(0));
+    let (asr_handle, mut asr_listener) = parakeet::create::<()>(&onnx, onnx::Executor::Cuda(0));
 
     // audioin pump
     tokio::spawn({
@@ -58,7 +58,7 @@ async fn main() {
                 }
                 if speech_started {
                     for chunk in preroll.drain(..) {
-                        asr_handle.send(asr::Input {
+                        asr_handle.send(parakeet::Input {
                             payload: (),
                             audio: chunk,
                             flush: false,
@@ -70,7 +70,7 @@ async fn main() {
                     in_speech = true;
                 }
                 if in_speech || speech_started {
-                    asr_handle.send(asr::Input {
+                    asr_handle.send(parakeet::Input {
                         payload: (),
                         audio,
                         flush: speech_ended,
@@ -88,10 +88,10 @@ async fn main() {
     // asr pump
     loop {
         match asr_listener.recv().await {
-            asr::Output::Partial { payload: _, utterance } => {
+            parakeet::Output::Partial { payload: _, utterance } => {
                 println!("Partial: {}", utterance);
             }
-            asr::Output::Final { payload: _, utterance } => {
+            parakeet::Output::Final { payload: _, utterance } => {
                 println!("Final: {}", utterance);
             }
         }

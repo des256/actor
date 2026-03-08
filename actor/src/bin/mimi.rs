@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let output_path = &args[2];
 
     // Load mimi encoder model
-    let encoder_path = PathBuf::from("data/tts/mimi_encoder.onnx");
+    let encoder_path = PathBuf::from("data/pocket/mimi_encoder.onnx");
     if !encoder_path.exists() {
         panic!("Missing: {}", encoder_path.display());
     }

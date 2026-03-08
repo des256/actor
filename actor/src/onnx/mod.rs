@@ -6,6 +6,40 @@ use std::{
     sync::Arc,
 };
 
+pub(crate) fn f32_to_f16(f: f32) -> u16 {
+    let bits = f.to_bits();
+    let sign = (bits >> 31) & 1;
+    let exponent = ((bits >> 23) & 0xFF) as i32;
+    let mantissa = bits & 0x7F_FFFF;
+
+    if exponent == 0xFF {
+        // Inf or NaN
+        let f16_mantissa = if mantissa != 0 { 0x200 } else { 0 };
+        return ((sign << 15) | (0x1F << 10) | f16_mantissa) as u16;
+    }
+
+    let new_exp = exponent - 127 + 15;
+
+    if new_exp >= 31 {
+        // Overflow → infinity
+        return ((sign << 15) | (0x1F << 10)) as u16;
+    }
+
+    if new_exp <= 0 {
+        if new_exp < -10 {
+            return (sign << 15) as u16; // too small → zero
+        }
+        let m = mantissa | 0x80_0000;
+        let shift = (1 - new_exp + 13) as u32;
+        let f16_mantissa = (m >> shift) as u16;
+        return ((sign << 15) as u16) | f16_mantissa;
+    }
+
+    // Normalized
+    let f16_mantissa = (mantissa >> 13) as u32;
+    ((sign << 15) | ((new_exp as u32) << 10) | f16_mantissa) as u16
+}
+
 pub(crate) fn f16_to_f32(half: u16) -> f32 {
     let sign = ((half >> 15) & 1) as u32;
     let exponent = ((half >> 10) & 0x1f) as u32;
@@ -886,6 +920,13 @@ impl sealed::Sealed for i32 {}
 impl TensorElement for i32 {
     fn element_type() -> ONNXTensorElementDataType {
         ONNXTensorElementDataType::Int32
+    }
+}
+
+impl sealed::Sealed for u16 {}
+impl TensorElement for u16 {
+    fn element_type() -> ONNXTensorElementDataType {
+        ONNXTensorElementDataType::Float16
     }
 }
 

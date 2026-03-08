@@ -122,7 +122,7 @@ async fn main() {
     println!(" done.");
     print!("loading ASR...");
     stdout().flush().unwrap();
-    let (asr_handle, mut asr_listener) = asr::create::<AsrPayload>(&onnx, onnx::Executor::Cuda(0));
+    let (asr_handle, mut asr_listener) = parakeet::create::<AsrPayload>(&onnx, onnx::Executor::Cuda(0));
     let asr_handle = Arc::new(asr_handle);
     println!(" done.");
     print!("loading Intent, Chat and Nuance SLMs...");
@@ -137,7 +137,7 @@ async fn main() {
     println!(" done.");
     print!("loading TTS...");
     stdout().flush().unwrap();
-    let (tts_handle, mut tts_listener) = tts::create::<TtsPayload>(&onnx, onnx::Executor::Cpu, VOICE_PATH, &epoch);
+    let (tts_handle, mut tts_listener) = pocket::create::<TtsPayload>(&onnx, onnx::Executor::Cpu, VOICE_PATH, &epoch);
     let tts_handle = Arc::new(tts_handle);
     println!(" done.");
 
@@ -208,7 +208,7 @@ async fn main() {
                 }
                 if speech_started {
                     for chunk in preroll.drain(..) {
-                        asr_handle.send(asr::Input {
+                        asr_handle.send(parakeet::Input {
                             payload: AsrPayload { user_speech_end },
                             audio: chunk,
                             flush: false,
@@ -220,7 +220,7 @@ async fn main() {
                     in_speech = true;
                 }
                 if in_speech || speech_started {
-                    asr_handle.send(asr::Input {
+                    asr_handle.send(parakeet::Input {
                         payload: AsrPayload { user_speech_end },
                         audio,
                         flush: speech_ended,
@@ -242,10 +242,10 @@ async fn main() {
         async move {
             loop {
                 match asr_listener.recv().await {
-                    asr::Output::Partial { payload: _, utterance } => {
+                    parakeet::Output::Partial { payload: _, utterance } => {
                         println!("({}...)", utterance);
                     }
-                    asr::Output::Final { payload, utterance } => {
+                    parakeet::Output::Final { payload, utterance } => {
                         if !utterance.is_empty() {
                             intent_handle.send(slm::Input {
                                 payload: IntentPayload {
@@ -479,7 +479,7 @@ async fn main() {
                     }
                 }
                 let trimmed = nuance.split(|c: char| !c.is_alphanumeric()).next().unwrap_or("").to_string();
-                tts_handle.send(tts::Input {
+                tts_handle.send(pocket::Input {
                     payload: TtsPayload {
                         user_speech_end,
                         user_sentence: user_sentence.clone(),

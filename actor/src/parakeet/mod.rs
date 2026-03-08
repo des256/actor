@@ -1,8 +1,8 @@
 use {crate::*, std::sync::Arc};
 
-const PARAKEET_ENCODER_PATH: &str = "data/asr/encoder.onnx";
-const PARAKEET_DECODER_PATH: &str = "data/asr/decoder_joint.onnx";
-const PARAKEET_TOKENIZER_PATH: &str = "data/asr/tokenizer.model";
+const PARAKEET_ENCODER_PATH: &str = "data/parakeet/encoder.onnx";
+const PARAKEET_DECODER_PATH: &str = "data/parakeet/decoder_joint.onnx";
+const PARAKEET_TOKENIZER_PATH: &str = "data/parakeet/tokenizer.model";
 
 const HANN_WINDOW_SIZE: usize = 400; // number of samples in Hann window
 const FFT_SIZE: usize = 512; // number of bins in FFT
@@ -30,8 +30,8 @@ pub enum Output<T: Clone + Send + 'static> {
     Final { payload: T, utterance: String },
 }
 
-mod asr;
-pub use asr::*;
+mod parakeet;
+pub use parakeet::*;
 
 mod decoder;
 use decoder::*;

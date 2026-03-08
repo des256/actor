@@ -1,5 +1,11 @@
 silero_vad.onnx
-asr/
-slm/
+parakeet/
+gemma3_4b/
+llama3_3b/
+llama3_8b/
+phi3/
+smollm3/
 xslm/
-tts/
+pocket/
+smollm2_360m/
+moonshine/

@@ -1,6 +1,6 @@
 use {actor::*, std::sync::Arc};
 
-const VOICE_PATH: &str = "data/tts/voices/desmond-sarcastic.bin";
+const VOICE_PATH: &str = "data/pocket/voices/hannah.bin";
 const TTS_SAMPLE_RATE: usize = 24000;
 const TTS_CHUNK_SIZE: usize = 512;
 
@@ -10,7 +10,7 @@ async fn main() {
     let (audioout_handle, mut audioout_listener) = audioout::create(TTS_SAMPLE_RATE, TTS_CHUNK_SIZE, None, &epoch);
     let audioout_handle = Arc::new(audioout_handle);
     let onnx = onnx::Onnx::new(24);
-    let (tts_handle, mut tts_listener) = tts::create::<()>(&onnx, onnx::Executor::Cpu, VOICE_PATH, &epoch);
+    let (tts_handle, mut tts_listener) = pocket::create::<()>(&onnx, onnx::Executor::Cpu, VOICE_PATH, &epoch);
 
     // spawn TTS pump
     tokio::spawn({
@@ -30,7 +30,7 @@ async fn main() {
 
     // send sentence to TTS
     println!("sending sentence to TTS, press CTRL-C to exit...");
-    tts_handle.send(tts::Input {
+    tts_handle.send(pocket::Input {
         payload: (),
         sentence: "The weather patterns in this region are dictated by the surrounding mountains. While the valleys remain dry, the peaks often collect moisture, creating a unique microclimate that shifts throughout the afternoon.".to_string(),
         stamp: epoch.current(),

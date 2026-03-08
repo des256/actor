@@ -44,8 +44,8 @@ pub fn create<T: Clone + Send + 'static>(
     epoch: &Arc<Epoch>,
 ) -> (Handle<T>, Listener<T>) {
     // create channels
-    let (input_tx, input_rx) = std_mpsc::channel::<tts::Input<T>>();
-    let (output_tx, output_rx) = tokio_mpsc::channel::<tts::Output<T>>(CHANNEL_CAPACITY);
+    let (input_tx, input_rx) = std_mpsc::channel::<pocket::Input<T>>();
+    let (output_tx, output_rx) = tokio_mpsc::channel::<pocket::Output<T>>(CHANNEL_CAPACITY);
 
     // load models
     let mut encoder = Encoder::new(&onnx, executor);
