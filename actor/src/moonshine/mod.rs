@@ -1,31 +1,32 @@
 use crate::*;
 
-const MOONSHINE_FRONTEND_PATH: &str = "data/moonshine/source/frontend.ort";
-const MOONSHINE_ENCODER_PATH: &str = "data/moonshine/source/encoder.ort";
-const MOONSHINE_DECODER_KV_PATH: &str = "data/moonshine/source/decoder_kv.ort";
-const MOONSHINE_CROSS_KV_PATH: &str = "data/moonshine/source/cross_kv.ort";
-const MOONSHINE_ADAPTER_PATH: &str = "data/moonshine/source/adapter.ort";
+const MOONSHINE_FRONTEND_PATH: &str = "data/moonshine/frontend.onnx";
+const MOONSHINE_ENCODER_PATH: &str = "data/moonshine/encoder.onnx";
+const MOONSHINE_DECODER_KV_PATH: &str = "data/moonshine/decoder_kv.onnx";
+const MOONSHINE_CROSS_KV_PATH: &str = "data/moonshine/cross_kv.onnx";
+const MOONSHINE_ADAPTER_PATH: &str = "data/moonshine/adapter.onnx";
 const MOONSHINE_TOKENIZER_PATH: &str = "data/moonshine/source/tokenizer.bin";
 
-// Model dimensions (medium streaming model)
-const ENCODER_DIM: usize = 768;
-const DECODER_DIM: usize = 640;
+const SAMPLES_PER_FRAME: usize = 320;
+const FEATURE_DIM: usize = 768;
 const DEPTH: usize = 14;
 const NHEADS: usize = 10;
 const HEAD_DIM: usize = 64;
 const VOCAB_SIZE: usize = 32768;
 const BOS_ID: i64 = 1;
 const EOS_ID: i64 = 2;
-const TOTAL_LOOKAHEAD: usize = 16;
-const D_MODEL_FRONTEND: usize = 768;
-const C1: usize = 1536;
-const MAX_SEQ_LEN: usize = 448;
-const LEFT_CONTEXT_PER_LAYER: usize = 16;
-const AUDIO_CHUNK_SIZE: usize = 1280;
+const WINDOW_SIZE: usize = 100;
+const WINDOW_SHIFT: usize = 20;
+const MAX_TOKENS: usize = 64;
+const CONV1_SIZE: usize = 768;
+const CONV2_SIZE: usize = 1536;
+const REPETITION_PENALTY: f32 = 1.2;
+const NO_REPEAT_NGRAM: usize = 3;
 
-pub enum Input<T: Clone + Send + 'static> {
-    Initial { payload: T, audio: Vec<i16> },
-    Continuing { payload: T, audio: Vec<i16>, flush: bool },
+pub struct Input<T: Clone + Send + 'static> {
+    pub payload: T,
+    pub audio: Vec<i16>,
+    pub flush: bool,
 }
 
 pub enum Output<T: Clone + Send + 'static> {
@@ -35,21 +36,3 @@ pub enum Output<T: Clone + Send + 'static> {
 
 mod moonshine;
 pub use moonshine::*;
-
-mod frontend;
-use frontend::*;
-
-mod encoder;
-use encoder::*;
-
-mod decoder;
-use decoder::*;
-
-mod cross;
-use cross::*;
-
-mod adapter;
-use adapter::*;
-
-mod tokenizer;
-use tokenizer::*;

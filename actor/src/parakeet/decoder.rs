@@ -20,71 +20,121 @@ impl Decoder {
         }
     }
 
+    /// TDT label-looping decode.
+    ///
+    /// `encoder_frames` is row-major: encoder_frames[frame * ENCODER_OUTPUT_DIM + dim].
+    /// Returns a vector of predicted token IDs.
     pub fn decode(&mut self, encoder_frames: &[f32]) -> Vec<i64> {
-        let mut tokens = Vec::new();
-        let mut transposed_frame = vec![0.0f32; ENCODER_OUTPUT_DIM];
-
-        // loop over every encoder frame
         let num_frames = encoder_frames.len() / ENCODER_OUTPUT_DIM;
-        for i in 0..num_frames {
-            // extract transposed frame
-            for d in 0..ENCODER_OUTPUT_DIM {
-                transposed_frame[d] = encoder_frames[d * num_frames + i];
+        if num_frames == 0 {
+            return Vec::new();
+        }
+
+        let mut tokens = Vec::new();
+        let mut time_index: usize = 0;
+        let mut symbols_added: usize = 0;
+
+        while time_index < num_frames {
+            // safety: force advance if too many symbols from same frame
+            if symbols_added >= MAX_SYMBOLS_PER_STEP {
+                time_index += 1;
+                symbols_added = 0;
+                continue;
             }
 
-            // create `encoder_outputs` tensor from transposed frame
-            let encoder_outputs = onnx::Value::from_slice(&self.session.onnx, &[1, ENCODER_OUTPUT_DIM, 1], &transposed_frame);
+            // save decoder state for blank restoration
+            let state1_data = self.state1.extract_tensor::<f32>().to_vec();
+            let state2_data = self.state2.extract_tensor::<f32>().to_vec();
 
-            // decode up to `MAX_SYMBOLS_PER_STEP` tokens
-            for _ in 0..MAX_SYMBOLS_PER_STEP {
-                // extract current decoder state so it can be restored at blank token
-                let state1_data = self.state1.extract_tensor::<f32>().to_vec();
-                let state2_data = self.state2.extract_tensor::<f32>().to_vec();
+            // create encoder frame tensor [1, ENCODER_OUTPUT_DIM, 1]
+            let frame_start = time_index * ENCODER_OUTPUT_DIM;
+            let frame_data = &encoder_frames[frame_start..frame_start + ENCODER_OUTPUT_DIM];
+            let encoder_outputs = onnx::Value::from_slice(
+                &self.session.onnx,
+                &[1, ENCODER_OUTPUT_DIM, 1],
+                frame_data,
+            );
 
-                // create `targets` and `target_length` tensors
-                let targets = onnx::Value::from_slice(&self.session.onnx, &[1, 1], &[self.last_token as i32]);
-                let target_length = onnx::Value::from_slice(&self.session.onnx, &[1], &[1i32]);
+            // create target tensors
+            let targets = onnx::Value::from_slice(
+                &self.session.onnx,
+                &[1, 1],
+                &[self.last_token as i32],
+            );
+            let target_length = onnx::Value::from_slice(
+                &self.session.onnx,
+                &[1],
+                &[1i32],
+            );
 
-                // run decoder
-                let mut outputs = self.session.run(
-                    &[
-                        ("encoder_outputs", &encoder_outputs),
-                        ("targets", &targets),
-                        ("target_length", &target_length),
-                        ("input_states_1", &self.state1),
-                        ("input_states_2", &self.state2),
-                    ],
-                    &["outputs", "prednet_lengths", "output_states_1", "output_states_2"],
+            // run decoder-joint
+            let mut outputs = self.session.run(
+                &[
+                    ("encoder_outputs", &encoder_outputs),
+                    ("targets", &targets),
+                    ("target_length", &target_length),
+                    ("input_states_1", &self.state1),
+                    ("input_states_2", &self.state2),
+                ],
+                &["outputs", "prednet_lengths", "output_states_1", "output_states_2"],
+            );
+
+            // extract logits (8193 token logits + 5 duration logits = 8198)
+            let logits = outputs[0].extract_as_f32();
+
+            // update decoder state from model output
+            self.state1 = outputs.remove(2);
+            self.state2 = outputs.remove(2);
+
+            // predict token: argmax over token logits [0..VOCAB_SIZE)
+            let token_logits = &logits[..VOCAB_SIZE];
+            let predicted_token = token_logits
+                .iter()
+                .enumerate()
+                .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|(idx, _)| idx as i64)
+                .unwrap_or(0);
+
+            // predict duration: argmax over duration logits [VOCAB_SIZE..VOCAB_SIZE+NUM_DURATIONS)
+            let duration_logits = &logits[VOCAB_SIZE..VOCAB_SIZE + NUM_DURATIONS];
+            let duration_index = duration_logits
+                .iter()
+                .enumerate()
+                .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|(idx, _)| idx)
+                .unwrap_or(0);
+            let mut duration = TDT_DURATIONS[duration_index];
+
+            if predicted_token == BLANK_ID {
+                // blank: restore decoder state, force duration >= 1
+                self.state1 = onnx::Value::from_slice(
+                    &self.session.onnx,
+                    &[2, 1, DECODER_STATE_DIM],
+                    &state1_data,
                 );
-
-                // extract logits
-                let logits = outputs[0].extract_tensor::<f32>().to_vec();
-
-                // update decoder state
-                self.state1 = outputs.remove(2);
-                self.state2 = outputs.remove(2);
-
-                // find most likely token
-                let valid_range = &logits[..VOCAB_SIZE.min(logits.len())];
-                let predicted_token = valid_range
-                    .iter()
-                    .enumerate()
-                    .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-                    .map(|(idx, _)| idx as i64)
-                    .unwrap_or(0);
-
-                // if blank, restore state and exit loop
-                if predicted_token == BLANK_ID {
-                    self.state1 = onnx::Value::from_slice(&self.session.onnx, &[2, 1, DECODER_STATE_DIM], &state1_data);
-                    self.state2 = onnx::Value::from_slice(&self.session.onnx, &[2, 1, DECODER_STATE_DIM], &state2_data);
-                    break;
+                self.state2 = onnx::Value::from_slice(
+                    &self.session.onnx,
+                    &[2, 1, DECODER_STATE_DIM],
+                    &state2_data,
+                );
+                if duration == 0 {
+                    duration = 1;
                 }
-
-                // otherwise add token
+                time_index += duration;
+                symbols_added = 0;
+            } else {
+                // non-blank: emit token, advance by duration
                 tokens.push(predicted_token);
                 self.last_token = predicted_token;
+                time_index += duration;
+                if duration > 0 {
+                    symbols_added = 0;
+                } else {
+                    symbols_added += 1;
+                }
             }
         }
+
         tokens
     }
 

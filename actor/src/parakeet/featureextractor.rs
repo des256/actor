@@ -1590,7 +1590,7 @@ static HANN_WINDOW: [f32; HANN_WINDOW_SIZE] = [
 ];
 
 const HOP_SIZE: usize = 160; // 10ms at 16kHz
-const PRE_EMPHASIS: f32 = 0.97; // initial high-pass
+const PRE_EMPHASIS: f32 = 0.0; // disabled for parakeet v3
 const LOG_ZERO_GUARD: f32 = 5.960_464_5e-08;
 
 pub struct FeatureExtractor {
@@ -1667,6 +1667,24 @@ impl FeatureExtractor {
                     energy += MEL[fb_offset + l] * spectrum[l];
                 }
                 features[frame_offset + k] = (energy + LOG_ZERO_GUARD).ln();
+            }
+        }
+
+        // per-feature normalization (zero mean, unit variance per mel band)
+        for k in 0..MEL_SIZE {
+            let mut sum = 0.0f32;
+            for i in 0..num_frames {
+                sum += features[i * MEL_SIZE + k];
+            }
+            let mean = sum / num_frames as f32;
+            let mut var_sum = 0.0f32;
+            for i in 0..num_frames {
+                let diff = features[i * MEL_SIZE + k] - mean;
+                var_sum += diff * diff;
+            }
+            let std = (var_sum / num_frames as f32).sqrt().max(1e-5);
+            for i in 0..num_frames {
+                features[i * MEL_SIZE + k] = (features[i * MEL_SIZE + k] - mean) / std;
             }
         }
 

@@ -28,78 +28,45 @@ pub fn create<T: Clone + Send + 'static>(onnx: &Arc<onnx::Onnx>, executor: onnx:
     // start audio pump
     std::thread::spawn({
         move || {
-            let mut features = Vec::new();
-            let mut frames = 0usize;
+            let mut audio_buffer = Vec::new();
             let mut accumulator = String::new();
 
             // input pump
             while let Ok(input) = input_rx.recv() {
-                // extract features and append them to `features`
-                if !input.audio.is_empty() {
-                    let new_features = feature_extractor.extract_features(&input.audio);
-                    let new_frames = new_features.len() / MEL_SIZE;
-                    if new_frames > 0 {
-                        features.extend_from_slice(&new_features);
-                        frames += new_frames;
-                    }
+                // append audio to audio buffer
+                audio_buffer.extend_from_slice(&input.audio);
+
+                // on flush, make sure there is atleast one window available
+                if input.flush && audio_buffer.len() < WINDOW_SIZE {
+                    audio_buffer.resize(WINDOW_SIZE, 0);
                 }
 
-                // on flush, make sure there is at least one full window available
-                if input.flush && (frames > 0) && (frames < ENCODER_WINDOW_SIZE) {
-                    let pad_frames = ENCODER_WINDOW_SIZE - frames;
-                    features.resize(features.len() + pad_frames * MEL_SIZE, 0.0);
-                    frames = ENCODER_WINDOW_SIZE;
-                }
+                // while a full window is available
+                while audio_buffer.len() >= WINDOW_SIZE {
+                    let window = audio_buffer[..WINDOW_SIZE].to_vec();
+                    audio_buffer.drain(..WINDOW_SHIFT);
 
-                // process full windows
-                while frames >= ENCODER_WINDOW_SIZE {
-                    // transpose first window
-                    let window = &features[..ENCODER_WINDOW_SIZE * MEL_SIZE];
-                    let mut transposed_window = vec![0.0f32; ENCODER_WINDOW_SIZE * MEL_SIZE];
-                    for frame in 0..ENCODER_WINDOW_SIZE {
-                        for bin in 0..MEL_SIZE {
-                            transposed_window[bin * ENCODER_WINDOW_SIZE + frame] = window[frame * MEL_SIZE + bin];
-                        }
-                    }
+                    feature_extractor.reset();
+                    decoder.reset();
 
-                    // shift `features` by `encoder.chunk_shift()` frames
-                    let shift_frames = ENCODER_CHUNK_SHIFT.min(frames);
-                    let shift_floats = shift_frames * MEL_SIZE;
-                    features.drain(..shift_floats);
-                    frames -= shift_frames;
-
-                    // encode transposed window
-                    let encoder_frames = encoder.encode_window(&transposed_window);
-
-                    // greedy decode into tokens
+                    let features = feature_extractor.extract_features(&window);
+                    let encoder_frames = encoder.encode(&features);
                     let tokens = decoder.decode(&encoder_frames);
 
-                    // extract text from tokens
                     let text = tokenizer.tokenize(&tokens);
-
-                    // add to accumulator and send as partial output
-                    if text.chars().any(|c| c.is_alphanumeric()) {
-                        accumulator.push_str(&text);
-                        if let Err(error) = output_tx.blocking_send(parakeet::Output::<T>::Partial {
-                            payload: input.payload.clone(),
-                            utterance: accumulator.clone(),
-                        }) {
-                            panic!("Asr: failed to send partial output: {}", error);
-                        }
-                    }
+                    println!("{}", text);
                 }
 
-                // when flushing, send final output and reset everything
                 if input.flush {
+                    // NOTE: for now this will return an empty string
                     if let Err(error) = output_tx.blocking_send(parakeet::Output::<T>::Final {
                         payload: input.payload.clone(),
                         utterance: accumulator.clone(),
                     }) {
                         panic!("Asr: failed to send final output: {}", error);
                     }
+                    audio_buffer.clear();
                     feature_extractor.reset();
-                    features.clear();
-                    frames = 0;
                     encoder.reset();
                     decoder.reset();
                     accumulator.clear();

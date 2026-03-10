@@ -1,21 +1,23 @@
 use {crate::*, std::sync::Arc};
 
-const PARAKEET_ENCODER_PATH: &str = "data/parakeet/encoder.onnx";
-const PARAKEET_DECODER_PATH: &str = "data/parakeet/decoder_joint.onnx";
-const PARAKEET_TOKENIZER_PATH: &str = "data/parakeet/tokenizer.model";
+const PARAKEET_ENCODER_PATH: &str = "data/parakeet/onnx/encoder.onnx";
+const PARAKEET_DECODER_PATH: &str = "data/parakeet/onnx/decoder_joint.onnx";
+const PARAKEET_TOKENIZER_PATH: &str = "data/parakeet/onnx/tokenizer.model";
 
 const HANN_WINDOW_SIZE: usize = 400; // number of samples in Hann window
 const FFT_SIZE: usize = 512; // number of bins in FFT
 const SPECTRUM_SIZE: usize = FFT_SIZE / 2 + 1; // number of bins in spectrum
 const MEL_SIZE: usize = 128; // number of bands in mel filterbank
-const ENCODER_WINDOW_SIZE: usize = 121; // size of encoder window
-const ENCODER_CHUNK_SHIFT: usize = 112; // number of frames to shift between chunks
-const ENCODER_LAYERS: usize = 24; // number of layers in encoder
+
+const WINDOW_SIZE: usize = 64000; // number of samples in encoder window
+const WINDOW_SHIFT: usize = 1600; // number of samples to shift between windows
+
 const ENCODER_OUTPUT_DIM: usize = 1024; // encoder output vector size
-const ENCODER_CHANNEL_DIM: usize = 70; // channel-related context dimension
-const ENCODER_TIME_DIM: usize = 8; // time-related context dimension
-const BLANK_ID: i64 = 1024; // token ID for blank token
-const VOCAB_SIZE: usize = 1025; // 1024 tokens + 1 blank
+
+const BLANK_ID: i64 = 8192; // token ID for blank token (vocab_size index)
+const VOCAB_SIZE: usize = 8193; // 8192 tokens + 1 blank
+const NUM_DURATIONS: usize = 5; // TDT duration logit count
+const TDT_DURATIONS: [usize; 5] = [0, 1, 2, 3, 4]; // TDT duration values
 const DECODER_STATE_DIM: usize = 640; // decoder context dimension
 const MAX_SYMBOLS_PER_STEP: usize = 16; // maximum number of tokens to decode per step
 
