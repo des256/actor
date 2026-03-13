@@ -9,14 +9,15 @@ RUN dpkg -i cuda-keyring_1.1-1_all.deb
 RUN apt-get update
 
 # CUDA 12.6
-RUN apt-get install -y cuda-cudart-12-6 cuda-compiler-12-6
+RUN apt-get install -y cuda-toolkit-12-6 cuda-cudart-12-6 cuda-compiler-12-6
 
 # TensorRT 10.3
 RUN pip3 install tensorrt==10.3.0 tensorrt-cu12
 
-# TensorRT-LLM
+# TensorRT-LLM 0.14.0
 RUN git clone https://github.com/NVIDIA/TensorRT-LLM.git
 WORKDIR /TensorRT-LLM
+RUN git checkout v0.14.0
 RUN git submodule update --init --recursive
 RUN git lfs pull
-RUN python3 ./scripts/build_wheel.py --cuda_architectures "87-real"
+RUN python3 ./scripts/build_wheel.py --cuda_architectures 87 -DENABLE_MULTI_DEVICE=0 --build_type Release
