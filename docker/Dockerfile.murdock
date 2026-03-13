@@ -18,10 +18,13 @@ ENV TRT_PATH=/opt/TensorRT-10.7.0.23
 ENV LD_LIBRARY_PATH=$TRT_PATH/lib
 ENV PATH=$TRT_PATH/bin:$PATH
 
+# more tools
+RUN apt-get install -y cmake
+
 # TensorRT-LLM 0.14.0
 RUN git clone https://github.com/NVIDIA/TensorRT-LLM.git
 WORKDIR /TensorRT-LLM
 RUN git checkout v0.14.0
 RUN git submodule update --init --recursive
 RUN git lfs pull
-RUN python3 ./scripts/build_wheel.py --clean --build_type Release --cuda_architectures 89 --install -DENABLE_MULTI_DEVICE=0 --job_count 4
+#RUN python3 ./scripts/build_wheel.py --clean --build_type Release --cuda_architectures 89 --install -DENABLE_MULTI_DEVICE=0 --job_count 4
