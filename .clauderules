@@ -1,0 +1,22 @@
+# Rust Project Conventions & Boundaries
+
+## Structural Philosophy
+
+- **Minimalist Dependency Policy:** Avoid adding new crates to `Cargo.toml` unless absolutely necessary. Prefer standard library (`std`) implementations.
+- **Module Exposure:** Use the "Re-export Pattern" for public submodules.
+  - Format: `mod filename; pub use filename::*;`
+  - Internal/Private submodules should use standard `mod` declarations without the glob re-export.
+  - When importing internal submodules, use `use filename::*` instead of importing each symbol specifically.
+
+## Coding Style
+
+- **Compact Imports:** Consolidate `use` statements into a single nested block.
+  - Good: `use std::{collections::HashMap, fmt::Display, sync::Arc};`
+  - Bad: Multiple single-line `use` statements.
+- **Naming:** Follow standard Rust naming (`PascalCase` for types, `snake_case` for functions/variables).
+
+## Project Boundaries
+
+- Only modify files within the `/src` directory.
+- Do not alter `build.rs` or CI/CD workflows unless explicitly asked.
+- Before creating a new file, check if a module already exists to house the logic.

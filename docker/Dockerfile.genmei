@@ -1,0 +1,22 @@
+FROM ubuntu:22.04
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y python3.10 python3-pip python3-venv git git-lfs curl wget
+RUN git lfs install
+
+# Install NVIDIA CUDA keyring
+RUN wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+RUN dpkg -i cuda-keyring_1.1-1_all.deb
+RUN apt-get update
+
+# CUDA 12.6
+RUN apt-get install -y cuda-cudart-12-6 cuda-compiler-12-6
+
+# TensorRT 10.3
+RUN pip3 install tensorrt==10.3.0 tensorrt-cu12
+
+# TensorRT-LLM
+RUN git clone https://github.com/NVIDIA/TensorRT-LLM.git
+WORKDIR /TensorRT-LLM
+RUN git submodule update --init --recursive
+RUN git lfs pull
+RUN python3 ./scripts/build_wheel.py --cuda_architectures "89-real"
