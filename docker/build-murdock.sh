@@ -1,1 +1,1 @@
-docker build -f Dockerfile.murdock -t murdock .
+docker build -f Dockerfile.murdock -t actor .

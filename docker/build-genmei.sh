@@ -1,1 +1,1 @@
-docker build -f Dockerfile.genmei -t genmei .
+docker build -f Dockerfile.genmei -t actor .
