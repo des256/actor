@@ -1,21 +1,22 @@
-# PLAN
+# THAT DOCKERFILE
 
-## Base
+`./build-genmei.sh` for the desktop
+`./build-murdock.sh` for the jetson
 
-- Ubuntu 22
-- Python 3.10
+But...
 
-## CUDA + TensorRT
+Make sure that the exact NVIDIA TensorRT tar file is available from `docker/`:
 
-- Whichever CUDA is available, should be >= 12.6
-- TensorRT 10.3, based on CUDA 12.6
+genmei: TensorRT-10.7.0.23.Linux.x86_64-gnu.cuda-12.6.tar.gz
+murdock: TensorRT-10.7.0.23.l4t.aarch64-gnu.cuda-12.6.tar.gz
 
-## TensorRT-LLM
+## Details
 
-- build TensorRT-LLM for CUDA 12.6, TensorRT 10.3, specifically for architectures 87 (Jetson) and 89 (Desktop)
+Linux: Ubuntu 22.04
+CUDA: 12.6
+TensorRT: 10.7.0.23
+TensorRT-LLM:
 
-# USAGE
+## When Ready...
 
-- build engines
-- run tests
-- run experiments
+They're called `actor:genmei` and `actor:murdock`. Used to build engines, run tools and run the apps as well.
