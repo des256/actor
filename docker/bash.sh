@@ -1,1 +1,1 @@
-docker exec -it actor bash
+docker run -it --rm actor:latest bash
