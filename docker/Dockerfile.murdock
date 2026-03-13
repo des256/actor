@@ -12,7 +12,7 @@ RUN apt-get update
 RUN apt-get install -y cuda-toolkit-12-6 cuda-cudart-12-6 cuda-compiler-12-6
 
 # TensorRT 10.7
-COPY ~/Downloads/TensorRT-10.7.0.23.l4t.aarch64-gnu.cuda-12.6.tar.gz /opt/
+COPY /home/desmond/Downloads/TensorRT-10.7.0.23.l4t.aarch64-gnu.cuda-12.6.tar.gz /opt/
 RUN tar -xzvf /opt/TensorRT-10.7.0.23.l4t.aarch64-gnu.cuda-12.6.tar.gz -C /opt/ && rm /opt/TensorRT-10.7.0.23.l4t.aarch64-gnu.cuda-12.6.tar.gz
 ENV TRT_PATH=/opt/TensorRT-10.7.0.23
 ENV LD_LIBRARY_PATH=$TRT_PATH/lib:$LD_LIBRARY_PATH
