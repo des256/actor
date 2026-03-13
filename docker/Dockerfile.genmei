@@ -40,4 +40,4 @@ RUN git checkout v0.14.0
 RUN git submodule update --init --recursive
 RUN git lfs pull
 RUN sed -i 's/tensorrt~=/# &/' requirements.txt
-RUN python3 ./scripts/build_wheel.py --clean --build_type Release --cuda_architectures 89 --install -DENABLE_MULTI_DEVICE=0 --job_count 8
+RUN python3 ./scripts/build_wheel.py --clean --build_type Release --cuda_architectures 89 --install -DENABLE_MULTI_DEVICE=OFF --job_count 8
