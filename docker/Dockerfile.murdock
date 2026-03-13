@@ -6,17 +6,27 @@ RUN git lfs install
 # Install NVIDIA CUDA keyring
 RUN wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/arm64/cuda-keyring_1.1-1_all.deb
 RUN dpkg -i cuda-keyring_1.1-1_all.deb
+RUN rm cuda-keyring_1.1-1_all.deb
 RUN apt-get update
 
-# CUDA 12.6
+# start with empty LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=
+
+# CUDA 12.6 with a bunch of tools
 RUN apt-get install -y cuda-toolkit-12-6 cuda-cudart-12-6 cuda-compiler-12-6
+ENV LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:$LD_LIBRARY_PATH
+ENV PATH=/usr/local/cuda-12.6/bin:$PATH
 
 # TensorRT 10.7
 COPY TensorRT-10.7.0.23.l4t.aarch64-gnu.cuda-12.6.tar.gz /opt/
-RUN tar -xzvf /opt/TensorRT-10.7.0.23.l4t.aarch64-gnu.cuda-12.6.tar.gz -C /opt/ && rm /opt/TensorRT-10.7.0.23.l4t.aarch64-gnu.cuda-12.6.tar.gz
+RUN tar -xzvf /opt/TensorRT-10.7.0.23.l4t.aarch64-gnu.cuda-12.6.tar.gz -C /opt/
+RUN rm /opt/TensorRT-10.7.0.23.l4t.aarch64-gnu.cuda-12.6.tar.gz
+WORKDIR /opt/TensorRT-10.7.0.23/python
+RUN python3 -m pip install tensorrt-10.7.0-cp310-none-linux_aarch64.whl
+WORKDIR /
 ENV TRT_PATH=/opt/TensorRT-10.7.0.23
-ENV LD_LIBRARY_PATH=$TRT_PATH/lib
 ENV PATH=$TRT_PATH/bin:$PATH
+ENV LD_LIBRARY_PATH=$TRT_PATH/lib:$LD_LIBRARY_PATH
 
 # more tools
 RUN apt-get install -y cmake
