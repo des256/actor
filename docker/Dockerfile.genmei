@@ -25,7 +25,7 @@ WORKDIR /opt/TensorRT-10.7.0.23/python
 RUN python3 -m pip install tensorrt-10.7.0-cp310-none-linux_x86_64.whl
 WORKDIR /
 RUN cp /opt/TensorRT-10.7.0.23/include/* /usr/include/x86_64-linux-gnu/
-RUN cp /opt/TensorRT-10.7.0.23/lib/* /usr/lib/x86_64-linux-gnu/
+RUN -R cp /opt/TensorRT-10.7.0.23/lib/* /usr/lib/x86_64-linux-gnu/
 ENV TRT_PATH=/opt/TensorRT-10.7.0.23
 ENV PATH=$TRT_PATH/bin:$PATH
 ENV LD_LIBRARY_PATH=$TRT_PATH/lib:$LD_LIBRARY_PATH
