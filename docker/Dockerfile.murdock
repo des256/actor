@@ -24,4 +24,4 @@ WORKDIR /TensorRT-LLM
 RUN git checkout v0.14.0
 RUN git submodule update --init --recursive
 RUN git lfs pull
-RUN python3 ./scripts/build_wheel.py --cuda_architectures 87 -DENABLE_MULTI_DEVICE=0 --build_type Release --jobs 4
+RUN python3 ./scripts/build_wheel.py --clean --build_type Release --cuda_architectures 89 --install -DENABLE_MULTI_DEVICE=0 --job_count 4
