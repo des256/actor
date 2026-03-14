@@ -1,6 +1,6 @@
 FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y python3.10 python3-pip python3-venv git git-lfs curl wget
+RUN apt-get update && apt-get install -y python3.10 python3-pip python3-venv git git-lfs curl wget cmake vim libopenmpi-dev
 RUN git lfs install
 
 # Install NVIDIA CUDA keyring
@@ -42,8 +42,8 @@ RUN ldconfig
 WORKDIR /
 RUN rm -rf nccl
 
-# more tools
-RUN apt-get install -y cmake vim libopenmpi-dev
+# PyTorch 2.5.0
+RUN pip install https://developer.download.nvidia.com/compute/redist/jp/v61/pytorch/torch-2.5.0a0+872d972e41.nv24.08.17622132-cp310-cp310-linux_aarch64.whl
 
 # TensorRT-LLM 0.14.0
 RUN ln -s /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/libcuda.so.1
