@@ -72,7 +72,7 @@ impl Tensorrt {
         Arc::new(Self { runtime })
     }
 
-    pub fn load_engine(&mut self, path: &str) -> Arc<Engine> {
+    pub fn load_engine(self: &Arc<Self>, path: &str) -> Arc<Engine> {
         let c_path = match CString::new(path) {
             Ok(c_path) => c_path,
             Err(error) => panic!("Null byte in engine path: {}", error),
@@ -128,12 +128,19 @@ impl Engine {
                 dtype: DataType::from_ffi(dtype_raw),
                 shape: dims[..ndims as usize].to_vec(),
             });
-        }   result
+        }
+        result
     }
 
-    pub fn create_context(&self) -> Arc<Self> {
+    pub fn create_context(self: &Arc<Self>) -> Arc<Context> {
         let mut context = null_mut();
-        if let 
+        if unsafe { ffi::trt_context_create(self.engine, &mut context) } != ffi::TrtStatus::Ok {
+            panic!("failed to create context: {}", last_error());
+        }
+        Arc::new(Context {
+            engine: Arc::clone(&self),
+            context,
+        })
     }
 }
 
