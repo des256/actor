@@ -20,6 +20,7 @@ pub mod parakeet;
 pub mod pocket;
 pub mod prompt;
 pub mod slm;
+pub mod tensorrt;
 pub mod vad;
 pub mod wsserver;
 pub mod xslm;

@@ -1,1 +1,1 @@
-docker run -it --rm actor:latest bash
+docker run -it --rm --gpus all actor:latest bash

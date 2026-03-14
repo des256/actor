@@ -16,6 +16,7 @@ ENV LD_LIBRARY_PATH=
 RUN apt-get install -y cuda-toolkit-12-6 cuda-cudart-12-6 cuda-compiler-12-6
 ENV LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:$LD_LIBRARY_PATH
 ENV PATH=/usr/local/cuda-12.6/bin:$PATH
+RUN python3 -m pip install cuda-python==12.6.2.post1
 
 # TensorRT 10.7
 COPY TensorRT-10.7.0.23.Linux.x86_64-gnu.cuda-12.6.tar.gz /opt/
@@ -31,13 +32,21 @@ ENV PATH=$TRT_PATH/bin:$PATH
 ENV LD_LIBRARY_PATH=$TRT_PATH/lib:$LD_LIBRARY_PATH
 
 # more tools
-RUN apt-get install -y cmake vim
+RUN apt-get install -y cmake vim libopenmpi-dev libnccl-dev
 
 # TensorRT-LLM 0.14.0
+RUN ln -s /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/libcuda.so.1
+ENV SAVED_LD_LIBRARY_PATH=$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64/stubs:$LD_LIBRARY_PATH
 RUN git clone https://github.com/NVIDIA/TensorRT-LLM.git
 WORKDIR /TensorRT-LLM
 RUN git checkout v0.14.0
 RUN git submodule update --init --recursive
 RUN git lfs pull
+RUN sed -i 's/mpi4py/# &/' requirements.txt
 RUN sed -i 's/tensorrt~=/# &/' requirements.txt
-RUN python3 ./scripts/build_wheel.py --clean --build_type Release --cuda_architectures 89 --install -DENABLE_MULTI_DEVICE=OFF --job_count 8
+RUN sed -i "s/pynvml.__version__/getattr(pynvml,'__version__','99.0.0')/" /TensorRT-LLM/tensorrt_llm/profiler.py
+RUN python3 ./scripts/build_wheel.py --build_type Release -a "89" --install --job_count 28
+RUN rm /usr/local/cuda/lib64/stubs/libcuda.so.1
+ENV LD_LIBRARY_PATH=$SAVED_LD_LIBRARY_PATH
+WORKDIR /
