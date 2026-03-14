@@ -32,7 +32,7 @@ ENV PATH=$TRT_PATH/bin:$PATH
 ENV LD_LIBRARY_PATH=$TRT_PATH/lib:$LD_LIBRARY_PATH
 
 # more tools
-RUN apt-get install -y cmake vim libopenmpi-dev libnccl-dev
+RUN apt-get install -y cmake vim libopenmpi-dev
 
 # TensorRT-LLM 0.14.0
 RUN ln -s /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/libcuda.so.1
