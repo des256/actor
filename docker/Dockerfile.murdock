@@ -57,7 +57,7 @@ RUN git lfs pull
 RUN sed -i 's/tensorrt~=/# &/' requirements.txt
 RUN sed -i 's/pynvml.__version__/getattr(pynvml,"__version__","99.0.0")/' /TensorRT-LLM/tensorrt_llm/profiler.py
 RUN sed -i 's/torch>=2.4.0a0,<=2.4.0/torch>=2.5.0/' requirements.txt
-RUN python3 ./scripts/build_wheel.py --build_type Release -a "87" --install --job_count 4
+RUN python3 ./scripts/build_wheel.py --build_type Release -a "87" --install --job_count 4 --use_ccache
 RUN rm /usr/local/cuda/lib64/stubs/libcuda.so.1
 ENV LD_LIBRARY_PATH=$SAVED_LD_LIBRARY_PATH
 WORKDIR /
