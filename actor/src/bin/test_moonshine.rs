@@ -62,7 +62,6 @@ async fn main() {
                     first_result = Some(elapsed);
                 }
                 println!("final: {}", utterance);
-                println!("total time: {:?}", elapsed);
                 println!("latency: {:?}", first_result.unwrap());
                 break;
             }

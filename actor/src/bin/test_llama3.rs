@@ -8,6 +8,24 @@ async fn main() {
     println!("loading model...");
     let epoch = Arc::new(Epoch::new());
     let (llm_handle, mut llm_listener) = llama3::create::<()>(&epoch);
+
+    // warmup
+    println!("warming up...");
+    let prompt = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+    
+You're a useful assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>
+Hi"
+    .to_string();
+    llm_handle.send(llama3::Input {
+        payload: (),
+        prompt,
+        stamp: epoch.current(),
+        max_tokens: 50,
+    });
+    while let llama3::Output::Token { .. } = llm_listener.recv().await {}
+
+    // measure TTFT
+    println!("testing...");
     let prompt = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>
     
 You're a useful assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>

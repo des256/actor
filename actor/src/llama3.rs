@@ -10,8 +10,8 @@ use {
 
 const CHANNEL_CAPACITY: usize = 64;
 
-const ENGINE_PATH: &str = "data/llama3_3b/engine/model.engine";
-const TOKENIZER_PATH: &str = "data/llama3_3b/engine/tokenizer.json";
+const ENGINE_PATH: &str = "data/llama3/engine";
+const TOKENIZER_PATH: &str = "data/llama3/engine/tokenizer.json";
 
 const BOS_TOKEN: i32 = 128000;
 const EOS_TOKEN: i32 = 128001;

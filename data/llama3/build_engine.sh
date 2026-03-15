@@ -4,7 +4,7 @@ set -euo pipefail
 
 mkdir -p engine
 
-docker run --rm --user $(id -u):$(id -g) --gpus all -v .:/local actor trtllm-build \
+docker run --rm --user $(id -u):$(id -g) --gpus all -v .:/local -w /local actor trtllm-build \
     --checkpoint_dir "/local/ckpt/" \
     --output_dir "/local/engine/" \
     --max_batch_size 1024 \
