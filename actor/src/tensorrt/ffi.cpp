@@ -14,6 +14,8 @@
 #include <optional>
 #include <vector>
 
+namespace tle = tensorrt_llm::executor;
+
 class TrtLogger : public nvinfer1::ILogger {
 public:
     void log(Severity severity, const char* msg) noexcept override {

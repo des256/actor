@@ -14,6 +14,11 @@ typedef enum {
 } TrtStatus;
 
 typedef enum {
+    TRTLLM_OK = 0,
+    TRTLLM_ERROR = 1,
+} TrtLlmStatus;
+
+typedef enum {
     TRTLLM_DECODER_ONLY = 0,
     TRTLLM_ENCODER_ONLY = 1,
     TRTLLM_ENCODER_DECODER = 2,

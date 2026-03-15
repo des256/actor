@@ -1,7 +1,4 @@
-use {
-    crate::*,
-    std::ffi::{CStr, CString},
-};
+use {super::*, std::ffi::CString};
 
 /// Model architecture type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,17 +69,6 @@ pub struct Executor {
 unsafe impl Send for Executor {}
 unsafe impl Sync for Executor {}
 
-fn last_error() -> String {
-    unsafe {
-        let ptr = ffi::trtllm_get_last_error();
-        if ptr.is_null() {
-            "Unknown TRT-LLM error".to_string()
-        } else {
-            CStr::from_ptr(ptr).to_string_lossy().into_owned()
-        }
-    }
-}
-
 impl Executor {
     /// Create a new executor from an engine directory.
     pub fn new(engine_dir: &str, config: &ExecutorConfig) -> Self {
@@ -97,7 +83,7 @@ impl Executor {
                 &mut handle,
             )
         };
-        if status != ffi::TrtLlmStatus::Ok {
+        if status != ffi::TrtStatus::Ok {
             panic!("Failed to create TRT-LLM executor: {}", last_error());
         }
         Self { handle }
@@ -112,8 +98,8 @@ impl Executor {
         end_id: Option<i32>,
         pad_id: Option<i32>,
         streaming: bool,
-    ) -> u64 {
-        let mut req_id: u64 = 0;
+    ) -> i64 {
+        let mut request: i64 = 0;
         let status = unsafe {
             ffi::trtllm_executor_enqueue(
                 self.handle,
@@ -127,13 +113,13 @@ impl Executor {
                 end_id.unwrap_or(-1),
                 pad_id.unwrap_or(-1),
                 streaming as i32,
-                &mut req_id,
+                &mut request as *mut i64,
             )
         };
-        if status != ffi::TrtLlmStatus::Ok {
+        if status != ffi::TrtStatus::Ok {
             panic!("Failed to enqueue TRT-LLM request: {}", last_error());
         }
-        req_id
+        request
     }
 
     /// Await a response for a request.
@@ -155,7 +141,7 @@ impl Executor {
                 timeout_ms,
             )
         };
-        if status != ffi::TrtLlmStatus::Ok {
+        if status != ffi::TrtStatus::Ok {
             panic!("Failed to await TRT-LLM response for request {req_id}: {}", last_error());
         }
         buf.truncate(n_tokens);
@@ -165,7 +151,7 @@ impl Executor {
     /// Cancel a pending request.
     pub fn cancel(&self, req_id: u64) {
         let status = unsafe { ffi::trtllm_executor_cancel(self.handle, req_id) };
-        if status != ffi::TrtLlmStatus::Ok {
+        if status != ffi::TrtStatus::Ok {
             panic!("Failed to cancel TRT-LLM request {req_id}: {}", last_error());
         }
     }
@@ -173,7 +159,7 @@ impl Executor {
     /// Gracefully shut down the executor (blocks until all requests finish).
     pub fn shutdown(&self) {
         let status = unsafe { ffi::trtllm_executor_shutdown(self.handle) };
-        if status != ffi::TrtLlmStatus::Ok {
+        if status != ffi::TrtStatus::Ok {
             panic!("Failed to shut down TRT-LLM executor: {}", last_error());
         }
     }

@@ -46,6 +46,7 @@ RUN git lfs pull
 RUN sed -i 's/tensorrt~=/# &/' requirements.txt
 RUN sed -i 's/pynvml.__version__/getattr(pynvml,"__version__","99.0.0")/' /TensorRT-LLM/tensorrt_llm/profiler.py
 RUN python3 ./scripts/build_wheel.py --build_type Release -a "89" --install --job_count 28
+RUN pip install /TensorRT-LLM/build/tensorrt_llm-0.14.0-cp310-cp310-linux_x86_64.whl
 RUN rm /usr/local/cuda/lib64/stubs/libcuda.so.1
 ENV LD_LIBRARY_PATH=$SAVED_LD_LIBRARY_PATH
 WORKDIR /

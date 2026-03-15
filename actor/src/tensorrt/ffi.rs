@@ -75,7 +75,7 @@ unsafe extern "C" {
         end_id: i32,
         pad_id: i32,
         streaming: i32,
-        out_request: *mut *mut TrtLlmExecutor,
+        out_request: *mut i64,
     ) -> TrtStatus;
     pub unsafe fn trtllm_executor_await(
         executor: *mut TrtLlmExecutor,

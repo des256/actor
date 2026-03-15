@@ -65,6 +65,7 @@ COPY libnvdla_compiler.so /usr/lib/aarch64-linux-gnu/
 COPY libnvcudla.so /usr/lib/aarch64-linux-gnu/
 RUN python3 ./scripts/build_wheel.py --build_type Release -a "87" --install --job_count 4 --use_ccache
 ENV PIP_CONSTRAINT=
+RUN pip install /TensorRT-LLM/build/tensorrt_llm-0.14.0-cp310-cp310-linux_aarch64.whl
 RUN rm /usr/local/cuda/lib64/stubs/libcuda.so.1
 ENV LD_LIBRARY_PATH=$SAVED_LD_LIBRARY_PATH
 WORKDIR /
