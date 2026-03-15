@@ -61,8 +61,8 @@ RUN apt install -y ccache
 RUN pip show torch | grep ^Version | cut -d' ' -f2 | xargs -I{} sh -c 'echo "torch=={}"' >/tmp/constraints.txt
 ENV PIP_CONSTRAINT=/tmp/constraints.txt
 RUN apt install -y libcudnn9-cuda-12 libcudnn9-dev-cuda-12 libopenblas-dev libcusparselt0 libcusparselt-dev
-COPY /usr/lib/aarch64-linux-gnu/nvidia/libnvdla_compiler.so /usr/lib/aarch64-linux-gnu/
-COPY /usr/lib/aarch64-linux-gnu/nvidia/libnvcudla.so /usr/lib/aarch64-linux-gnu/
+COPY libnvdla_compiler.so /usr/lib/aarch64-linux-gnu/
+COPY libnvcudla.so /usr/lib/aarch64-linux-gnu/
 RUN python3 ./scripts/build_wheel.py --build_type Release -a "87" --install --job_count 4 --use_ccache
 ENV PIP_CONSTRAINT=
 RUN rm /usr/local/cuda/lib64/stubs/libcuda.so.1
