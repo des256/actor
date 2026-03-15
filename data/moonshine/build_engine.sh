@@ -18,16 +18,20 @@ docker run --rm --user $(id -u):$(id -g) --gpus all -v .:/local actor trtexec \
     --minShapes="input_values:1x32000,attention_mask:1x32000" \
     --optShapes="input_values:1x32000,attention_mask:1x32000" \
     --maxShapes="input_values:1x32000,attention_mask:1x32000" \
-    --memPoolSize=workspace:4096 \
-    --fp16
+    --memPoolSize=workspace:512 \
+    --fp16 \
+    --builderOptimizationLevel=5
+#--stripWeights
 
 docker run --rm --user $(id -u):$(id -g) --gpus all -v .:/local actor trtexec \
     --onnx="/local/ckpt/decoder_model.onnx" \
     --saveEngine="/local/engine/decoder.engine" \
     --minShapes="input_ids:1x1,encoder_hidden_states:1x100x768,encoder_attention_mask:1x100,k_self:14x1x10x0x64,v_self:14x1x10x0x64" \
-    --optShapes="input_ids:1x1,encoder_hidden_states:1x100x768,encoder_attention_mask:1x100,k_self:14x1x10x32x64,v_self:14x1x10x32x64" \
-    --maxShapes="input_ids:1x1,encoder_hidden_states:1x100x768,encoder_attention_mask:1x100,k_self:14x1x10x64x64,v_self:14x1x10x64x64" \
-    --memPoolSize=workspace:4096 \
-    --fp16 --int8 --int4
+    --optShapes="input_ids:1x1,encoder_hidden_states:1x100x768,encoder_attention_mask:1x100,k_self:14x1x10x16x64,v_self:14x1x10x16x64" \
+    --maxShapes="input_ids:1x1,encoder_hidden_states:1x100x768,encoder_attention_mask:1x100,k_self:14x1x10x32x64,v_self:14x1x10x32x64" \
+    --memPoolSize=workspace:512 \
+    --fp16 --int4 \
+    --builderOptimizationLevel=5
+#--stripWeights
 
 cp ckpt/tokenizer.json engine/
