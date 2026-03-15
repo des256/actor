@@ -58,7 +58,7 @@ RUN sed -i 's/tensorrt~=/# &/' requirements.txt
 RUN sed -i 's/pynvml.__version__/getattr(pynvml,"__version__","99.0.0")/' /TensorRT-LLM/tensorrt_llm/profiler.py
 RUN sed -i 's/torch>=/# &/' requirements.txt
 RUN apt install -y ccache
-RUN python3 -c "import torch; print(f'torch=={torch.__version__}')" >/tmp/constraints.txt
+RUN pip show torch | grep ^Version | cut -d' ' -f2 | xargs -I{} sh -c 'echo "torch=={}"' >/tmp/constraints.txt
 ENV PIP_CONSTRAINT=/tmp/constraints.txt
 RUN python3 ./scripts/build_wheel.py --build_type Release -a "87" --install --job_count 4 --use_ccache
 ENV PIP_CONSTRAINT=
