@@ -27,7 +27,7 @@ static thread_local std::string g_last_error;
 static void set_error(const char* msg) { g_last_error = msg; }
 static void set_error(const std::string& msg) { g_last_error = msg; }
 
-struct TrtRuntime { nvinfer1::IRuntime* runtime; }
+struct TrtRuntime { nvinfer1::IRuntime* runtime; };
 struct TrtEngine { nvinfer1::ICudaEngine* engine; };
 struct TrtContext { nvinfer1::IExecutionContext* context; };
 
@@ -53,9 +53,9 @@ TrtStatus trt_runtime_create(TrtRuntime** out) {
 }
 
 void trt_runtime_destroy(TrtRuntime* runtime) {
-    if (rt) {
-        delete rt->runtime;
-        delete rt;
+    if (runtime) {
+        delete runtime->runtime;
+        delete runtime;
     }
 }
 
@@ -73,7 +73,7 @@ TrtStatus trt_engine_load(TrtRuntime* runtime, const char* path, TrtEngine** out
             set_error(std::string("Failed to read engine file: ") + path);
             return TRT_ERROR;
         }
-        auto* engine = rt->runtime->deserializeCudaEngine(data.data(), data.size());
+        auto* engine = runtime->runtime->deserializeCudaEngine(data.data(), data.size());
         if (!engine) {
             set_error("Failed to deserialize CUDA engine");
             return TRT_ERROR;

@@ -16,7 +16,6 @@ pub mod history;
 pub mod lcd;
 pub mod moonshine;
 pub mod onnx;
-pub mod parakeet;
 pub mod pocket;
 pub mod prompt;
 pub mod slm;

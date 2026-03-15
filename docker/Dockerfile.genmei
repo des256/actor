@@ -49,3 +49,24 @@ RUN python3 ./scripts/build_wheel.py --build_type Release -a "89" --install --jo
 RUN rm /usr/local/cuda/lib64/stubs/libcuda.so.1
 ENV LD_LIBRARY_PATH=$SAVED_LD_LIBRARY_PATH
 WORKDIR /
+
+# Rust (could be moved to earlier stage)
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH=/root/.cargo/bin:$PATH
+RUN apt-get install -y pkg-config libasound2-dev libpulse-dev
+
+# ONNX runtime
+RUN wget https://github.com/microsoft/onnxruntime/releases/download/v1.21.0/onnxruntime-linux-x64-gpu-1.21.0.tgz
+RUN tar xzf onnxruntime-linux-x64-gpu-1.21.0.tgz
+RUN rm onnxruntime-linux-x64-gpu-1.21.0.tgz
+WORKDIR /onnxruntime-linux-x64-gpu-1.21.0
+RUN cp lib/libonnxruntime.so.1.21.0 /usr/local/lib/
+RUN ln -s /usr/local/lib/libonnxruntime.so.1.21.0 /usr/local/lib/libonnxruntime.so.1
+RUN ln -s /usr/local/lib/libonnxruntime.so.1.21.0 /usr/local/lib/libonnxruntime.so
+RUN cp lib/libonnxruntime_providers_cuda.so /usr/local/lib/
+RUN cp lib/libonnxruntime_providers_tensorrt.so /usr/local/lib/
+RUN cp lib/libonnxruntime_providers_shared.so /usr/local/lib/
+RUN cp -R include/* /usr/local/include/
+RUN ldconfig
+WORKDIR /
+RUN rm -rf onnxruntime-linux-x64-gpu-1.21.0
