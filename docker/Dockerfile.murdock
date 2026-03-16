@@ -42,6 +42,10 @@ RUN sed -i 's/pynvml.__version__/getattr(pynvml,"__version__","99.0.0")/' /Tenso
 RUN pip show torch | grep ^Version | cut -d' ' -f2 | xargs -I{} sh -c 'echo "torch=={}"' >/tmp/constraints.txt
 ENV PIP_CONSTRAINT=/tmp/constraints.txt
 RUN apt install -y libcudnn9-dev-cuda-12 libopenblas-dev
+RUN dpkg -i https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/arm64/libcusparselt0_0.7.1.0-1_arm64.deb
+RUN dpkg -i https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/arm64/libcusparselt-dev_0.7.1.0-1_arm64.deb
+RUN dpkg -i https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/arm64/libcusparse-12-6_12.5.4.2-1_arm64.deb
+RUN dpkg -i https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/arm64/libcusparse-dev-12-6_12.5.4.2-1_arm64.deb
 #COPY libnvdla_compiler.so /usr/lib/aarch64-linux-gnu/
 #COPY libnvcudla.so /usr/lib/aarch64-linux-gnu/
 RUN python3 ./scripts/build_wheel.py --build_type Release -a "87" --install --job_count 4 --use_ccache
