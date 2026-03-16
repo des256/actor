@@ -46,6 +46,7 @@ COPY libcusparselt0-cuda-12_0.8.1.1-1_arm64.deb /tmp/
 RUN dpkg -i /tmp/libcusparselt0-cuda-12_0.8.1.1-1_arm64.deb
 COPY libcusparselt0-dev-cuda-12_0.8.1.1-1_arm64.deb /tmp/
 RUN dpkg -i /tmp/libcusparselt0-dev-cuda-12_0.8.1.1-1_arm64.deb
+RUN ldconfig
 #COPY libnvdla_compiler.so /usr/lib/aarch64-linux-gnu/
 #COPY libnvcudla.so /usr/lib/aarch64-linux-gnu/
 RUN python3 ./scripts/build_wheel.py --build_type Release -a "87" --install --job_count 4 --use_ccache
