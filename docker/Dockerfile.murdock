@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/l4t-jetpack:r36.5.0
+FROM nvcr.io/nvidia/l4t-jetpack:r36.4.0
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y python3.10 python3-pip python3-venv git git-lfs curl wget cmake vim libopenmpi-dev ccache
 RUN git lfs install
