@@ -7,8 +7,13 @@ But...
 
 Make sure that the exact NVIDIA TensorRT tar file is available from `docker/`:
 
-genmei: TensorRT-10.7.0.23.Linux.x86_64-gnu.cuda-12.6.tar.gz
-murdock: TensorRT-10.7.0.23.l4t.aarch64-gnu.cuda-12.6.tar.gz
+genmei:
+TensorRT-10.7.0.23.Linux.x86_64-gnu.cuda-12.6.tar.gz
+
+murdock:
+TensorRT-10.7.0.23.l4t.aarch64-gnu.cuda-12.6.tar.gz
+libcusparselt0-dev-cuda-12_0.8.1.1-1_arm64.deb
+libcusparselt0-cuda-12_0.8.1.1-1_arm64.deb
 
 ## Details
 
