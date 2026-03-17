@@ -12,6 +12,7 @@ pub use codec::*;
 
 pub mod audioin;
 pub mod audioout;
+pub mod bge;
 pub mod history;
 pub mod lcd;
 pub mod llama3;

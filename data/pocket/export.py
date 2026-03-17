@@ -13,6 +13,7 @@ Plus metadata.safetensors with small tensors needed by the runtime
 import sys
 from pathlib import Path
 
+import onnx
 import pocket_tts  # noqa: E402
 import safetensors.torch
 import torch
@@ -288,6 +289,22 @@ torch.onnx.export(
     },
     opset_version=18,
 )
+
+# Strip the "reduction" attribute from ScatterND nodes.  PyTorch's ONNX
+# exporter emits ScatterND with reduction="none" (from aten.slice_scatter),
+# but TensorRT's parser rejects any ScatterND that carries a reduction
+# attribute.  Since "none" is the default semantics (plain scatter, no
+# reduction), removing the attribute is a no-op in terms of model behaviour.
+print("Stripping unsupported ScatterND reduction attributes ...")
+_decoder_path = str(export_dir / "mimi_decoder_model.onnx")
+_onnx_model = onnx.load(_decoder_path)
+for _node in _onnx_model.graph.node:
+    if _node.op_type == "ScatterND":
+        _to_remove = [a for a in _node.attribute if a.name == "reduction"]
+        for a in _to_remove:
+            _node.attribute.remove(a)
+onnx.save(_onnx_model, _decoder_path)
+del _onnx_model
 
 
 # ===== 5. Metadata tensors ================================================

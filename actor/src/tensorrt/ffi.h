@@ -13,21 +13,9 @@ typedef enum {
     TRT_ERROR = 1,
 } TrtStatus;
 
-typedef enum {
-    TRTLLM_OK = 0,
-    TRTLLM_ERROR = 1,
-} TrtLlmStatus;
-
-typedef enum {
-    TRTLLM_DECODER_ONLY = 0,
-    TRTLLM_ENCODER_ONLY = 1,
-    TRTLLM_ENCODER_DECODER = 2,
-} TrtLlmModelType;
-
 typedef struct TrtRuntime TrtRuntime;
 typedef struct TrtEngine TrtEngine;
 typedef struct TrtContext TrtContext;
-typedef struct TrtLlmExecutor TrtLlmExecutor;
 
 const char* trt_get_last_error(void);
 
@@ -45,13 +33,6 @@ TrtStatus trt_context_set_input_shape(TrtContext* context,const char* name,const
 TrtStatus trt_context_set_tensor_address(TrtContext* context,const char* name,void* ptr);
 TrtStatus trt_context_enqueue(TrtContext* context,void* stream);
 void trt_context_destroy(TrtContext* context);
-
-TrtLlmStatus trtllm_executor_create(const char* engine_dir,TrtLlmModelType model_type,float kv_cache_fraction,int32_t max_beam_width,TrtLlmExecutor** out_handle);
-TrtLlmStatus trtllm_executor_enqueue(TrtLlmExecutor* executor,const int32_t* tokens,size_t n_tokens,int32_t max_new,float temperature,int32_t top_k,float top_p,float rep_penalty,int32_t end_id,int32_t pad_id,int streaming,uint64_t* out_req_id);
-TrtLlmStatus trtllm_executor_await(TrtLlmExecutor* executor,uint64_t req_id,int32_t* out_tokens,size_t capacity,size_t* out_n_tokens,int* out_is_final,int64_t timeout_ms);
-TrtLlmStatus trtllm_executor_cancel(TrtLlmExecutor* executor, uint64_t req_id);
-TrtLlmStatus trtllm_executor_shutdown(TrtLlmExecutor* executor);
-void trtllm_executor_destroy(TrtLlmExecutor* executor);
 
 #ifdef __cplusplus
 }

@@ -9,8 +9,8 @@ async fn main() {
     let epoch = Arc::new(Epoch::new());
     let (audioout_handle, mut audioout_listener) = audioout::create(TTS_SAMPLE_RATE, TTS_CHUNK_SIZE, None, &epoch);
     let audioout_handle = Arc::new(audioout_handle);
-    let onnx = onnx::Onnx::new(24);
-    let (tts_handle, mut tts_listener) = pocket::create::<()>(&onnx, onnx::Executor::Cpu, VOICE_PATH, &epoch);
+    let trt = tensorrt::Tensorrt::new();
+    let (tts_handle, mut tts_listener) = pocket::create::<()>(&trt, VOICE_PATH, &epoch);
 
     // spawn TTS pump
     tokio::spawn({

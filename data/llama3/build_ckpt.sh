@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
-# assumes Llama3 Instruct 3b (safetensors from HuggingFace) is available from data/llama3/source
+# assumes Llama 3.2 3B Instruct (safetensors from HuggingFace) is available in data/llama3/source
 set -euo pipefail
 
-mkdir -p ckpt/
+if [[ ! -d "source/" ]]; then
+    echo "missing source/ directory with Llama 3.2 safetensors"
+    exit 1
+fi
 
-docker run --rm --user $(id -u):$(id -g) --gpus all -v .:/local -w /local actor python3 "/local/export.py" --model_dir "source/" --output_dir "ckpt/" --dtype float16 --use_weight_only --weight_only_precision int4
+mkdir -p onnx/
 
-cp source/tokenizer.json ckpt/
+python3 "export.py" "source/" "onnx/"
+
+cp source/tokenizer.json onnx/

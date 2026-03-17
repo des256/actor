@@ -4,7 +4,7 @@ use std::time::Instant;
 #[tokio::main]
 async fn main() {
     // load wav file
-    let mut reader = hound::WavReader::open("test.wav").expect("Failed to open test.wav");
+    let mut reader = hound::WavReader::open("moonshine.wav").expect("Failed to open test.wav");
     let spec = reader.spec();
     assert_eq!(
         spec.sample_rate, 16000,

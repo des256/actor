@@ -10,6 +10,7 @@ use {
 };
 
 const CHANNEL_CAPACITY: usize = 64;
+const SAMPLES_PER_FRAME: usize = 1920;
 
 pub struct Handle<T: Clone + Send + 'static> {
     tx: std_mpsc::Sender<Input<T>>,
@@ -38,73 +39,43 @@ fn load_voice(voice_path: impl AsRef<Path>) -> Vec<f32> {
 }
 
 pub fn create<T: Clone + Send + 'static>(
-    onnx: &Arc<onnx::Onnx>,
-    executor: onnx::Executor,
+    trt: &Arc<tensorrt::Tensorrt>,
     voice_path: impl AsRef<Path>,
     epoch: &Arc<Epoch>,
 ) -> (Handle<T>, Listener<T>) {
-    // create channels
     let (input_tx, input_rx) = std_mpsc::channel::<pocket::Input<T>>();
     let (output_tx, output_rx) = tokio_mpsc::channel::<pocket::Output<T>>(CHANNEL_CAPACITY);
 
-    // load models
-    let mut encoder = Encoder::new(&onnx, executor);
-    let mut decoder = Decoder::new(&onnx, executor);
+    let mut pocket = TrtPocket::new(&trt);
     let tokenizer = Tokenizer::new();
+    let voice = load_voice(voice_path);
 
-    // condition voice
-    encoder.init_voice(&load_voice(voice_path));
+    pocket.init_voice(&voice);
 
-    // TODO: prepare re-usable tensors, or rather, do that in the constructors of each sub-module
-
-    // start sentence pump
     std::thread::spawn({
         let epoch = Arc::clone(&epoch);
         move || {
             while let Ok(input) = input_rx.recv() {
-                // skip if stale
                 if !epoch.is_current(input.stamp) {
                     continue;
                 }
 
-                // initialize state
-                encoder.reset();
+                // Reset to post-voice state
+                pocket.reset(&voice);
 
-                // tokenize sentence
+                // Tokenize and condition
                 let (tokens, eos_countdown_seed) = tokenizer.tokenize(&input.sentence);
+                pocket.condition(&tokens);
 
-                // condition the sentence
-                encoder.condition(&tokens);
-
-                // token loop
+                // Autoregressive loop — accumulate latents
                 let mut eos_countdown: Option<usize> = None;
-                let mut current_index = 0usize;
                 for _ in 0..MAX_TOKENS {
-                    // encoder step
-                    let (latent, is_eos) = encoder.step();
+                    let (_latent, is_eos) = pocket.step();
 
-                    // decode to audio
-                    let audio = decoder.decode(&latent);
-
-                    // exit if stale
                     if !epoch.is_current(input.stamp) {
                         break;
                     }
 
-                    // send output
-                    let is_last = if let Some(0) = eos_countdown { true } else { false };
-                    if let Err(error) = output_tx.blocking_send(Output {
-                        payload: input.payload.clone(),
-                        audio,
-                        index: current_index,
-                        last: is_last,
-                        stamp: input.stamp,
-                    }) {
-                        panic!("Tts: failed to send output: {}", error);
-                    }
-
-                    // next step
-                    current_index += 1;
                     if let Some(ref mut remaining) = eos_countdown {
                         if *remaining == 0 {
                             break;
@@ -112,6 +83,32 @@ pub fn create<T: Clone + Send + 'static>(
                         *remaining -= 1;
                     } else if is_eos {
                         eos_countdown = Some(eos_countdown_seed);
+                    }
+                }
+
+                // Skip decode if stale
+                if !epoch.is_current(input.stamp) {
+                    continue;
+                }
+
+                // Batch decode all latents to audio
+                let audio = pocket.decode_audio();
+
+                // Split audio into frame-sized chunks and send
+                let chunks: Vec<&[i16]> = audio.chunks(SAMPLES_PER_FRAME).collect();
+                let total_chunks = chunks.len();
+                for (i, chunk) in chunks.into_iter().enumerate() {
+                    if !epoch.is_current(input.stamp) {
+                        break;
+                    }
+                    if let Err(error) = output_tx.blocking_send(Output {
+                        payload: input.payload.clone(),
+                        audio: chunk.to_vec(),
+                        index: i,
+                        last: i == total_chunks - 1,
+                        stamp: input.stamp,
+                    }) {
+                        panic!("Tts: failed to send output: {}", error);
                     }
                 }
             }

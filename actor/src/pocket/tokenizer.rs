@@ -11,18 +11,45 @@ impl Tokenizer {
     }
 
     pub fn tokenize(&self, sentence: &str) -> (Vec<i64>, usize) {
-        // prepare
-        let mut prepared = sentence.trim().replace('\n', " ");
-        let words = prepared.split_whitespace().count();
-        let frames_after = if words <= 4 { 3 } else { 1 } + 2;
-        if words < 5 {
-            prepared = format!("        {}", prepared);
-        }
-        let prepared = format!("\u{2581}{}", prepared.replace(' ', "\u{2581}"));
+        let prepared = prepare_text(sentence);
 
-        // tokenize
         let encoding = self.tokenizer.encode(prepared, false).unwrap();
 
-        (encoding.get_ids().iter().map(|token| *token as i64).collect(), frames_after)
+        (
+            encoding.get_ids().iter().map(|token| *token as i64).collect(),
+            FRAMES_AFTER_EOS,
+        )
     }
+}
+
+/// Text normalization matching the model's expected input format.
+fn prepare_text(text: &str) -> String {
+    let mut t = text
+        .trim()
+        .replace('\n', " ")
+        .replace('\r', " ")
+        .replace("  ", " ");
+
+    if t.is_empty() {
+        return t;
+    }
+
+    // Uppercase first letter
+    let mut chars = t.chars();
+    if let Some(first) = chars.next() {
+        t = first.to_uppercase().to_string() + chars.as_str();
+    }
+
+    // Ensure ends with punctuation
+    if t.ends_with(|c: char| c.is_alphanumeric()) {
+        t.push('.');
+    }
+
+    // Pad short texts
+    if t.split_whitespace().count() < 5 {
+        t = format!("        {}", t);
+    }
+
+    // Prepend sentencepiece marker and replace spaces
+    format!("\u{2581}{}", t.replace(' ', "\u{2581}"))
 }

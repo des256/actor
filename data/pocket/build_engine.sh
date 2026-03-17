@@ -15,8 +15,8 @@ docker run --rm --user $(id -u):$(id -g) --gpus all -v .:/local actor trtexec \
     --onnx="/local/ckpt/mimi_encoder_model.onnx" \
     --saveEngine="/local/engine/mimi_encoder.engine" \
     --minShapes="audio:1x1x1920" \
-    --optShapes="audio:1x1x48000" \
-    --maxShapes="audio:1x1x480000" \
+    --optShapes="audio:1x1x16000" \
+    --maxShapes="audio:1x1x80000" \
     --memPoolSize=workspace:512 \
     --fp16 \
     --builderOptimizationLevel=5
@@ -33,12 +33,11 @@ docker run --rm --user $(id -u):$(id -g) --gpus all -v .:/local actor trtexec \
     --builderOptimizationLevel=5
 
 # -- Flow Net (flow-matching MLP) --
+# All dimensions are static (no dynamic_axes in the ONNX export), so no
+# --minShapes/--optShapes/--maxShapes — trtexec rejects profiles for fixed inputs.
 docker run --rm --user $(id -u):$(id -g) --gpus all -v .:/local actor trtexec \
     --onnx="/local/ckpt/flow_net_model.onnx" \
     --saveEngine="/local/engine/flow_net.engine" \
-    --minShapes="conditioning:1x1024,s:1x1,t:1x1,x:1x32" \
-    --optShapes="conditioning:1x1024,s:1x1,t:1x1,x:1x32" \
-    --maxShapes="conditioning:1x1024,s:1x1,t:1x1,x:1x32" \
     --memPoolSize=workspace:512 \
     --fp16 \
     --builderOptimizationLevel=5
