@@ -46,10 +46,14 @@ COPY libcusparselt0-cuda-12_0.8.1.1-1_arm64.deb /tmp/
 RUN dpkg -i /tmp/libcusparselt0-cuda-12_0.8.1.1-1_arm64.deb
 COPY libcusparselt0-dev-cuda-12_0.8.1.1-1_arm64.deb /tmp/
 RUN dpkg -i /tmp/libcusparselt0-dev-cuda-12_0.8.1.1-1_arm64.deb
+COPY libcuda-compiler-12-6_12.6.3-1_arm64.deb /tmp/
+RUN dpkg -i /tmp/libcuda-compiler-12-6_12.6.3-1_arm64.deb
+COPY libcudla-12-6_12.6.77-1_arm64.deb /tmp/
+RUN dpkg -i /tmp/libcudla-12-6_12.6.77-1_arm64.deb
+COPY libcudla-dev-12-6_12.6.77-1_arm64.deb /tmp/
+RUN dpkg -i /tmp/libcudla-dev-12-6_12.6.77-1_arm64.deb
 RUN ldconfig
 ENV LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/libcusparseLt/12:$LD_LIBRARY_PATH
-#COPY libnvdla_compiler.so /usr/lib/aarch64-linux-gnu/
-#COPY libnvcudla.so /usr/lib/aarch64-linux-gnu/
 RUN python3 ./scripts/build_wheel.py --build_type Release -a "87" --install --job_count 4 --use_ccache
 ENV PIP_CONSTRAINT=
 RUN pip install /TensorRT-LLM/build/tensorrt_llm-0.14.0-cp310-cp310-linux_aarch64.whl
