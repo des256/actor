@@ -46,8 +46,6 @@ COPY libcusparselt0-cuda-12_0.8.1.1-1_arm64.deb /tmp/
 RUN dpkg -i /tmp/libcusparselt0-cuda-12_0.8.1.1-1_arm64.deb
 COPY libcusparselt0-dev-cuda-12_0.8.1.1-1_arm64.deb /tmp/
 RUN dpkg -i /tmp/libcusparselt0-dev-cuda-12_0.8.1.1-1_arm64.deb
-COPY cuda-compiler-12-6_12.6.3-1_arm64.deb /tmp/
-RUN dpkg -i /tmp/cuda-compiler-12-6_12.6.3-1_arm64.deb
 COPY libcudla-12-6_12.6.77-1_arm64.deb /tmp/
 RUN dpkg -i /tmp/libcudla-12-6_12.6.77-1_arm64.deb
 COPY libcudla-dev-12-6_12.6.77-1_arm64.deb /tmp/
