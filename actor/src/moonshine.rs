@@ -34,14 +34,20 @@ const KV_MAX_BYTES: usize = DEPTH * NHEADS * MAX_TOKENS * HEAD_DIM * size_of::<f
 const CHANNEL_CAPACITY: usize = 64;
 
 pub struct Input<T: Clone + Send + 'static> {
-    pub payload: T,
-    pub audio: Vec<i16>,
-    pub flush: bool,
+    pub payload: T,      // pass-along payload
+    pub audio: Vec<i16>, // audio chunk
+    pub flush: bool,     // whether to flush after this chunk
 }
 
 pub enum Output<T: Clone + Send + 'static> {
-    Partial { payload: T, utterance: String },
-    Final { payload: T, utterance: String },
+    Partial {
+        payload: T,        // pass-along payload
+        utterance: String, // partial transcription
+    },
+    Final {
+        payload: T,        // pass-along payload
+        utterance: String, // final transcription
+    },
 }
 
 struct Direct {
@@ -73,7 +79,7 @@ impl Direct {
         let encoder_context = encoder_engine.create_context();
         let decoder_context = decoder_engine.create_context();
         let mut stream: *mut c_void = null_mut();
-        let _ = unsafe { tensorrt::cudaStreamCreate(&mut stream) };
+        let _ = unsafe { tensorrt::ffi::cudaStreamCreate(&mut stream) };
         let encoder_inputs = tensorrt::Buffer::new(AUDIO_SIZE * size_of::<f32>());
         let encoder_audio_buf = vec![0f32; AUDIO_SIZE];
         let encoder_attention_mask_data = vec![1i64; AUDIO_SIZE];
@@ -170,7 +176,7 @@ impl Direct {
         self.encoder_context
             .set_tensor_address("encoder_attention_mask", self.encoder_output_mask.ptr);
         self.encoder_context.enqueue(self.stream);
-        unsafe { tensorrt::cudaStreamSynchronize(self.stream) };
+        unsafe { tensorrt::ffi::cudaStreamSynchronize(self.stream) };
         self.encoder_output_mask.download(&mut self.encoder_output_mask_buf);
         for (dst, &src) in self
             .encoder_output_mask_i64
@@ -211,7 +217,7 @@ impl Direct {
             self.decoder_context
                 .set_tensor_address("out_v_self", self.cache_values[1 - kv_index].ptr);
             self.decoder_context.enqueue(self.stream);
-            unsafe { tensorrt::cudaStreamSynchronize(self.stream) };
+            unsafe { tensorrt::ffi::cudaStreamSynchronize(self.stream) };
             self.logits.fill(0.0);
             self.decoder_logits.download(&mut self.logits);
             for &token in &self.tokens {

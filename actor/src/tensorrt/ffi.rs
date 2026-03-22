@@ -24,6 +24,19 @@ pub struct TrtContext {
 }
 
 unsafe extern "C" {
+    pub fn cudaMalloc(ptr: *mut *mut c_void, size: usize) -> i32;
+    pub fn cudaFree(ptr: *mut c_void) -> i32;
+    pub fn cudaMemcpy(dst: *mut c_void, src: *const c_void, count: usize, kind: i32) -> i32;
+    pub fn cudaMemset(ptr: *mut c_void, value: i32, count: usize) -> i32;
+    pub fn cudaStreamCreate(stream: *mut *mut c_void) -> i32;
+    pub fn cudaStreamDestroy(stream: *mut c_void) -> i32;
+    pub fn cudaStreamSynchronize(stream: *mut c_void) -> i32;
+    pub fn cudaMemcpyAsync(dst: *mut c_void, src: *const c_void, count: usize, kind: i32, stream: *mut c_void) -> i32;
+    pub fn cudaEventCreateWithFlags(event: *mut *mut c_void, flags: u32) -> i32;
+    pub fn cudaEventRecord(event: *mut c_void, stream: *mut c_void) -> i32;
+    pub fn cudaEventDestroy(event: *mut c_void) -> i32;
+    pub fn cudaStreamWaitEvent(stream: *mut c_void, event: *mut c_void, flags: u32) -> i32;
+    pub fn cudaEventSynchronize(event: *mut c_void) -> i32;
     pub fn trt_get_last_error() -> *const c_char;
     pub fn trt_runtime_create(out: *mut *mut TrtRuntime) -> TrtStatus;
     pub fn trt_runtime_destroy(runtime: *mut TrtRuntime);

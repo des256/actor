@@ -5,19 +5,21 @@ import onnx
 import torch
 from transformers import AutoModel, AutoTokenizer
 
-export_dir = Path(sys.argv[1])
+export_dir = Path("onnx")
 
 print("Loading model (will auto-download from HuggingFace if needed) ...")
-model = AutoModel.from_pretrained("BAAI/bge-small-en-v1.5")
+model = AutoModel.from_pretrained("source")
 model.eval()
 
-tokenizer = AutoTokenizer.from_pretrained("BAAI/bge-small-en-v1.5")
+tokenizer = AutoTokenizer.from_pretrained("source")
 
 # Save tokenizer to output directory for Rust usage
 tokenizer.save_pretrained(export_dir)
 
 # Create dummy inputs for ONNX export
-dummy_input_ids = torch.tensor([[101, 2023, 2003, 1037, 3231, 102]], dtype=torch.long)  # [batch, seq_len]
+dummy_input_ids = torch.tensor(
+    [[101, 2023, 2003, 1037, 3231, 102]], dtype=torch.long
+)  # [batch, seq_len]
 dummy_attention_mask = torch.ones_like(dummy_input_ids, dtype=torch.long)
 dummy_token_type_ids = torch.zeros_like(dummy_input_ids, dtype=torch.long)
 
@@ -47,11 +49,15 @@ onnx.checker.check_model(onnx_model)
 # Print input/output info for verification
 print("\nModel inputs:")
 for inp in onnx_model.graph.input:
-    print(f"  - {inp.name}: {[d.dim_value if d.dim_value > 0 else d.dim_param for d in inp.type.tensor_type.shape.dim]}")
+    print(
+        f"  - {inp.name}: {[d.dim_value if d.dim_value > 0 else d.dim_param for d in inp.type.tensor_type.shape.dim]}"
+    )
 
 print("\nModel outputs:")
 for out in onnx_model.graph.output:
-    print(f"  - {out.name}: {[d.dim_value if d.dim_value > 0 else d.dim_param for d in out.type.tensor_type.shape.dim]}")
+    print(
+        f"  - {out.name}: {[d.dim_value if d.dim_value > 0 else d.dim_param for d in out.type.tensor_type.shape.dim]}"
+    )
 
 del model
 print("\nONNX export complete.")

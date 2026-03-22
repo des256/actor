@@ -1,4 +1,6 @@
-"""Export Llama 3.2 3B to ONNX format with explicit KV cache.
+"""Export Llama 3.2 3B to INT4 AWQ quantized ONNX with explicit KV cache.
+
+Pipeline: source/ → FP16 ONNX → INT4 AWQ quantization → ckpt/model.onnx
 
 Exports a single model with explicit KV cache I/O tensors for all 28 layers:
   - Inputs: input_ids, position_ids, past_key_values.{0..27}.{key,value}
@@ -8,29 +10,23 @@ The ONNX model implements the full Llama3 architecture: token embedding,
 RMSNorm, RoPE with llama3-style scaling, GQA attention, SwiGLU FFN, lm_head.
 """
 
-import json
-import sys
+import copy
+import os
 from pathlib import Path
 
 import numpy as np
 import onnx
-import onnx.numpy_helper
 import onnxruntime as ort
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import AutoConfig, AutoModelForCausalLM
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
-source_dir = Path(sys.argv[1])
-export_dir = Path(sys.argv[2])
-export_dir.mkdir(parents=True, exist_ok=True)
+SOURCE_DIR = Path("source")
+CKPT_DIR = Path("ckpt")
 
 # Load config
-config_path = source_dir / "config.json"
-with open(config_path) as f:
-    config_dict = json.load(f)
-
-config = AutoConfig.from_pretrained(source_dir, trust_remote_code=True)
+config = AutoConfig.from_pretrained(SOURCE_DIR, trust_remote_code=True)
 
 # Architecture constants from config
 NUM_LAYERS = config.num_hidden_layers  # 28
@@ -43,7 +39,9 @@ VOCAB_SIZE = config.vocab_size  # 128256
 RMS_NORM_EPS = config.rms_norm_eps  # 1e-05
 # RoPE params — handle both old (rope_theta + rope_scaling) and new (rope_parameters) config formats
 rope_params = getattr(config, "rope_parameters", None) or {}
-ROPE_THETA = rope_params.get("rope_theta", None) or getattr(config, "rope_theta", 500000.0)
+ROPE_THETA = rope_params.get("rope_theta", None) or getattr(
+    config, "rope_theta", 500000.0
+)
 
 rope_scaling = getattr(config, "rope_scaling", None) or rope_params
 ROPE_FACTOR = rope_scaling.get("factor", 32.0)
@@ -51,16 +49,12 @@ ROPE_HIGH_FREQ_FACTOR = rope_scaling.get("high_freq_factor", 4.0)
 ROPE_LOW_FREQ_FACTOR = rope_scaling.get("low_freq_factor", 1.0)
 ROPE_ORIGINAL_MAX_POS = rope_scaling.get("original_max_position_embeddings", 8192)
 
-print(f"Loading Llama 3.2 3B from {source_dir} ...")
+print(f"Loading Llama 3.2 3B from {SOURCE_DIR} ...")
 print(f"  Layers: {NUM_LAYERS}, Heads: {NUM_HEADS}, KV Heads: {NUM_KV_HEADS}")
-print(f"  Hidden: {HIDDEN_SIZE}, Intermediate: {INTERMEDIATE_SIZE}, Head Dim: {HEAD_DIM}")
-print(f"  Vocab: {VOCAB_SIZE}, RoPE theta: {ROPE_THETA}")
-
-# Load the full model (we'll extract weights from it)
-base_model = AutoModelForCausalLM.from_pretrained(
-    source_dir, dtype=torch.float16, low_cpu_mem_usage=True
+print(
+    f"  Hidden: {HIDDEN_SIZE}, Intermediate: {INTERMEDIATE_SIZE}, Head Dim: {HEAD_DIM}"
 )
-base_model.eval()
+print(f"  Vocab: {VOCAB_SIZE}, RoPE theta: {ROPE_THETA}")
 
 
 # ===== RMSNorm =====
@@ -167,9 +161,21 @@ class LlamaAttention(nn.Module):
         batch, seq_len, _ = x.shape
 
         # Project Q, K, V
-        q = self.q_proj(x).view(batch, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
-        k = self.k_proj(x).view(batch, seq_len, self.num_kv_heads, self.head_dim).transpose(1, 2)
-        v = self.v_proj(x).view(batch, seq_len, self.num_kv_heads, self.head_dim).transpose(1, 2)
+        q = (
+            self.q_proj(x)
+            .view(batch, seq_len, self.num_heads, self.head_dim)
+            .transpose(1, 2)
+        )
+        k = (
+            self.k_proj(x)
+            .view(batch, seq_len, self.num_kv_heads, self.head_dim)
+            .transpose(1, 2)
+        )
+        v = (
+            self.v_proj(x)
+            .view(batch, seq_len, self.num_kv_heads, self.head_dim)
+            .transpose(1, 2)
+        )
 
         # Apply RoPE — index into precomputed cos/sin by position
         pos = position_ids.squeeze(0)  # [seq_len]
@@ -235,7 +241,9 @@ class LlamaMLP(nn.Module):
 class LlamaDecoderLayer(nn.Module):
     def __init__(self, layer_weights, layer_idx):
         super().__init__()
-        self.input_layernorm = RMSNorm(layer_weights.input_layernorm.weight.data.clone(), RMS_NORM_EPS)
+        self.input_layernorm = RMSNorm(
+            layer_weights.input_layernorm.weight.data.clone(), RMS_NORM_EPS
+        )
         self.self_attn = LlamaAttention(layer_weights, layer_idx)
         self.post_attention_layernorm = RMSNorm(
             layer_weights.post_attention_layernorm.weight.data.clone(), RMS_NORM_EPS
@@ -279,7 +287,7 @@ class Llama3ForONNX(nn.Module):
         self.lm_head.weight.data = base_model.lm_head.weight.data.clone()
 
     def forward(self, input_ids, position_ids, *past_key_values):
-        # past_key_values: 56 tensors (28 layers × 2)
+        # past_key_values: 56 tensors (28 layers x 2)
         # Reshape into [(past_k_0, past_v_0), (past_k_1, past_v_1), ...]
         past_kv_list = []
         for i in range(NUM_LAYERS):
@@ -305,101 +313,297 @@ class Llama3ForONNX(nn.Module):
         return (logits, *present_key_values)
 
 
-# Build the ONNX-exportable model
-print("Building ONNX-exportable model...")
-onnx_model = Llama3ForONNX(base_model)
-onnx_model.eval()
+# ===== FP16 ONNX Export =====
+def export_fp16() -> Path:
+    """Export FP16 ONNX model with explicit KV cache to ckpt/model.onnx."""
+    CKPT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Create dummy inputs
-batch_size = 1
-seq_len = 1
-past_len = 0
+    # Load the full model (we'll extract weights from it)
+    base_model = AutoModelForCausalLM.from_pretrained(
+        SOURCE_DIR, dtype=torch.float16, low_cpu_mem_usage=True
+    )
+    base_model.eval()
 
-dummy_input_ids = torch.tensor([[128000]], dtype=torch.long)  # BOS token
-dummy_position_ids = torch.arange(past_len, past_len + seq_len, dtype=torch.long).unsqueeze(0)
-dummy_past_kv = [
-    torch.zeros(batch_size, NUM_KV_HEADS, past_len, HEAD_DIM, dtype=torch.float16)
-    for _ in range(NUM_LAYERS * 2)
-]
+    # Build the ONNX-exportable model
+    print("Building ONNX-exportable model...")
+    onnx_model = Llama3ForONNX(base_model)
+    onnx_model.eval()
 
-# Prepare input/output names
-input_names = ["input_ids", "position_ids"]
-output_names = ["logits"]
-dynamic_axes = {
-    "input_ids": {1: "seq_len"},
-    "position_ids": {1: "seq_len"},
-    "logits": {1: "seq_len"},
-}
+    # Create dummy inputs
+    batch_size = 1
+    seq_len = 1
+    past_len = 0
 
-for i in range(NUM_LAYERS):
-    input_names.append(f"past_key_values.{i}.key")
-    input_names.append(f"past_key_values.{i}.value")
-    output_names.append(f"present.{i}.key")
-    output_names.append(f"present.{i}.value")
+    dummy_input_ids = torch.tensor([[128000]], dtype=torch.long)  # BOS token
+    dummy_position_ids = torch.arange(
+        past_len, past_len + seq_len, dtype=torch.long
+    ).unsqueeze(0)
+    dummy_past_kv = [
+        torch.zeros(batch_size, NUM_KV_HEADS, past_len, HEAD_DIM, dtype=torch.float16)
+        for _ in range(NUM_LAYERS * 2)
+    ]
 
-    dynamic_axes[f"past_key_values.{i}.key"] = {2: "past_len"}
-    dynamic_axes[f"past_key_values.{i}.value"] = {2: "past_len"}
-    dynamic_axes[f"present.{i}.key"] = {2: "new_len"}
-    dynamic_axes[f"present.{i}.value"] = {2: "new_len"}
+    # Prepare input/output names
+    input_names = ["input_ids", "position_ids"]
+    output_names = ["logits"]
+    dynamic_axes = {
+        "input_ids": {1: "seq_len"},
+        "position_ids": {1: "seq_len"},
+        "logits": {1: "seq_len"},
+    }
 
-print(f"Exporting to ONNX with {len(input_names)} inputs and {len(output_names)} outputs...")
-print(f"  Inputs: {input_names[:4]} ... (56 KV tensors omitted)")
-print(f"  Outputs: {output_names[:3]} ... (56 KV tensors omitted)")
+    for i in range(NUM_LAYERS):
+        input_names.append(f"past_key_values.{i}.key")
+        input_names.append(f"past_key_values.{i}.value")
+        output_names.append(f"present.{i}.key")
+        output_names.append(f"present.{i}.value")
 
-# Export to ONNX
-onnx_path = export_dir / "model.onnx"
-torch.onnx.export(
-    onnx_model,
-    (dummy_input_ids, dummy_position_ids, *dummy_past_kv),
-    str(onnx_path),
-    input_names=input_names,
-    output_names=output_names,
-    dynamic_axes=dynamic_axes,
-    opset_version=18,
-    do_constant_folding=True,
-    dynamo=False,
-)
+        dynamic_axes[f"past_key_values.{i}.key"] = {2: "past_len"}
+        dynamic_axes[f"past_key_values.{i}.value"] = {2: "past_len"}
+        dynamic_axes[f"present.{i}.key"] = {2: "new_len"}
+        dynamic_axes[f"present.{i}.value"] = {2: "new_len"}
 
-# Verify the ONNX model (use path-based check — model exceeds 2GB protobuf limit)
-print("Verifying ONNX model...")
-onnx.checker.check_model(str(onnx_path))
+    print(
+        f"Exporting to ONNX with {len(input_names)} inputs and {len(output_names)} outputs..."
+    )
+    print(f"  Inputs: {input_names[:4]} ... (56 KV tensors omitted)")
+    print(f"  Outputs: {output_names[:3]} ... (56 KV tensors omitted)")
 
-# Count inputs/outputs
-onnx_model_proto = onnx.load(str(onnx_path), load_external_data=False)
-num_inputs = len(onnx_model_proto.graph.input)
-num_outputs = len(onnx_model_proto.graph.output)
-print(f"✓ ONNX model has {num_inputs} inputs and {num_outputs} outputs")
-assert num_inputs == 58, f"Expected 58 inputs, got {num_inputs}"
-assert num_outputs == 57, f"Expected 57 outputs, got {num_outputs}"
+    # Export to ONNX
+    onnx_path = CKPT_DIR / "model.onnx"
+    torch.onnx.export(
+        onnx_model,
+        (dummy_input_ids, dummy_position_ids, *dummy_past_kv),
+        str(onnx_path),
+        input_names=input_names,
+        output_names=output_names,
+        dynamic_axes=dynamic_axes,
+        opset_version=18,
+        do_constant_folding=True,
+        dynamo=False,
+    )
 
-# Numerical validation: compare ONNX vs PyTorch
-print("Running numerical validation...")
-sess_options = ort.SessionOptions()
-sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
-ort_session = ort.InferenceSession(str(onnx_path), sess_options, providers=["CPUExecutionProvider"])
+    # Verify the ONNX model (use path-based check — model exceeds 2GB protobuf limit)
+    print("Verifying ONNX model...")
+    onnx.checker.check_model(str(onnx_path))
 
-# Prepare test input
-test_input_ids = torch.tensor([[128000, 15339, 374]], dtype=torch.long)  # "Hello is"
-test_position_ids = torch.arange(0, 3, dtype=torch.long).unsqueeze(0)
-test_past_kv = [
-    torch.zeros(1, NUM_KV_HEADS, 0, HEAD_DIM, dtype=torch.float16)
-    for _ in range(NUM_LAYERS * 2)
-]
+    # Count inputs/outputs
+    onnx_model_proto = onnx.load(str(onnx_path), load_external_data=False)
+    num_inputs = len(onnx_model_proto.graph.input)
+    num_outputs = len(onnx_model_proto.graph.output)
+    print(f"ONNX model has {num_inputs} inputs and {num_outputs} outputs")
+    assert num_inputs == 58, f"Expected 58 inputs, got {num_inputs}"
+    assert num_outputs == 57, f"Expected 57 outputs, got {num_outputs}"
 
-# ONNX inference
-ort_inputs = {"input_ids": test_input_ids.numpy(), "position_ids": test_position_ids.numpy()}
-for i in range(NUM_LAYERS):
-    ort_inputs[f"past_key_values.{i}.key"] = test_past_kv[i * 2].numpy()
-    ort_inputs[f"past_key_values.{i}.value"] = test_past_kv[i * 2 + 1].numpy()
+    # Numerical validation: compare ONNX vs PyTorch
+    print("Running numerical validation...")
+    sess_options = ort.SessionOptions()
+    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+    ort_session = ort.InferenceSession(
+        str(onnx_path), sess_options, providers=["CPUExecutionProvider"]
+    )
 
-ort_outputs = ort_session.run(None, ort_inputs)
-onnx_logits = ort_outputs[0]
+    # Prepare test input
+    test_input_ids = torch.tensor([[128000, 15339, 374]], dtype=torch.long)  # "Hello is"
+    test_position_ids = torch.arange(0, 3, dtype=torch.long).unsqueeze(0)
+    test_past_kv = [
+        torch.zeros(1, NUM_KV_HEADS, 0, HEAD_DIM, dtype=torch.float16)
+        for _ in range(NUM_LAYERS * 2)
+    ]
 
-# Sanity check: verify logits shape and values are reasonable
-assert onnx_logits.shape == (1, 3, VOCAB_SIZE), f"Unexpected logits shape: {onnx_logits.shape}"
-top_token = int(np.argmax(onnx_logits[0, -1, :]))
-print(f"  Logits shape: {onnx_logits.shape}, top token at last pos: {top_token}")
-print("✓ ONNX model loads and produces valid logits")
+    # ONNX inference
+    ort_inputs = {
+        "input_ids": test_input_ids.numpy(),
+        "position_ids": test_position_ids.numpy(),
+    }
+    for i in range(NUM_LAYERS):
+        ort_inputs[f"past_key_values.{i}.key"] = test_past_kv[i * 2].numpy()
+        ort_inputs[f"past_key_values.{i}.value"] = test_past_kv[i * 2 + 1].numpy()
 
-print(f"\n✓ Export complete: {onnx_path}")
-print(f"  Model size: {onnx_path.stat().st_size / 1024 / 1024:.1f} MB")
+    ort_outputs = ort_session.run(None, ort_inputs)
+    onnx_logits = ort_outputs[0]
+
+    # Sanity check: verify logits shape and values are reasonable
+    assert onnx_logits.shape == (1, 3, VOCAB_SIZE), (
+        f"Unexpected logits shape: {onnx_logits.shape}"
+    )
+    top_token = int(np.argmax(onnx_logits[0, -1, :]))
+    print(f"  Logits shape: {onnx_logits.shape}, top token at last pos: {top_token}")
+    print("FP16 ONNX export complete")
+
+    return onnx_path
+
+
+# ===== INT4 AWQ Quantization =====
+def _patched_save_onnx(model, onnx_path, save_as_external_data=False):
+    """Patched save_onnx: handles EncodeError for >2GB models.
+
+    modelopt's save_onnx only catches ValueError from SerializeToString(),
+    but protobuf raises google.protobuf.message.EncodeError for >2GB models.
+    """
+    if not save_as_external_data:
+        try:
+            model_proto = model.SerializeToString()
+            if len(model_proto) > 2 * (1024**3):
+                save_as_external_data = True
+        except Exception:
+            save_as_external_data = True
+
+    model.ir_version = 10
+    if save_as_external_data:
+        external_data_path = os.path.basename(onnx_path) + "_data"
+        if os.path.exists(external_data_path):
+            os.remove(external_data_path)
+        model_copy = copy.deepcopy(model)
+        onnx.save_model(
+            model_copy,
+            onnx_path,
+            save_as_external_data=True,
+            all_tensors_to_one_file=True,
+            location=external_data_path,
+            size_threshold=1024,
+        )
+    else:
+        onnx.save(model, onnx_path)
+
+
+class C4CalibrationDataReader:
+    """Reads C4 calibration data formatted for the Llama3 ONNX model inputs."""
+
+    def __init__(self, tokenizer_path: Path, num_samples: int, seq_len: int):
+        from datasets import load_dataset
+
+        self.seq_len = seq_len
+        self.index = 0
+
+        print(f"Loading tokenizer from {tokenizer_path} ...")
+        tokenizer = AutoTokenizer.from_pretrained(str(tokenizer_path))
+
+        print(f"Loading C4 dataset (streaming, {num_samples} samples) ...")
+        dataset = load_dataset(
+            "allenai/c4",
+            "en",
+            split="train",
+            streaming=True,
+        )
+
+        self.inputs = []
+        count = 0
+        for sample in dataset:
+            tokens = tokenizer.encode(sample["text"], add_special_tokens=False)
+            if len(tokens) < seq_len:
+                continue
+
+            input_ids = np.array([tokens[:seq_len]], dtype=np.int64)
+            position_ids = np.arange(seq_len, dtype=np.int64).reshape(1, -1)
+
+            feed = {
+                "input_ids": input_ids,
+                "position_ids": position_ids,
+            }
+            # Empty KV cache for all layers (prefill mode)
+            for i in range(NUM_LAYERS):
+                feed[f"past_key_values.{i}.key"] = np.zeros(
+                    (1, NUM_KV_HEADS, 0, HEAD_DIM), dtype=np.float16
+                )
+                feed[f"past_key_values.{i}.value"] = np.zeros(
+                    (1, NUM_KV_HEADS, 0, HEAD_DIM), dtype=np.float16
+                )
+
+            self.inputs.append(feed)
+            count += 1
+            if count % 100 == 0:
+                print(f"  Prepared {count}/{num_samples} calibration samples")
+            if count >= num_samples:
+                break
+
+        print(f"Prepared {len(self.inputs)} calibration samples")
+        if len(self.inputs) < num_samples:
+            print(
+                f"WARNING: Only got {len(self.inputs)} samples "
+                f"(requested {num_samples})"
+            )
+
+    def get_next(self):
+        if self.index >= len(self.inputs):
+            return None
+        result = self.inputs[self.index]
+        self.index += 1
+        return result
+
+    def __iter__(self):
+        return iter(self.inputs)
+
+    def __len__(self):
+        return len(self.inputs)
+
+
+def quantize_int4(onnx_path: Path):
+    """INT4 AWQ quantization using NVIDIA modelopt.
+
+    Reads the FP16 ONNX model from onnx_path, quantizes with AWQ,
+    and overwrites it in place.
+    """
+    # onnx_graphsurgeon 0.5.8 references onnx.helper.float32_to_bfloat16,
+    # which was removed in onnx 1.17+. Provide it so graphsurgeon can import.
+    import onnx.helper
+
+    if not hasattr(onnx.helper, "float32_to_bfloat16"):
+        onnx.helper.float32_to_bfloat16 = lambda x: (
+            np.array(x, dtype=np.float32).view(np.uint32) >> 16
+        ).astype(np.uint16)
+
+    # Monkey-patch modelopt's save_onnx before importing quantize
+    import modelopt.onnx.quantization.int4 as _int4_mod
+    import modelopt.onnx.utils as _modelopt_utils
+
+    _modelopt_utils.save_onnx = _patched_save_onnx
+    _int4_mod.save_onnx = _patched_save_onnx
+
+    from modelopt.onnx.quantization.int4 import quantize
+
+    # Calibration parameters — awq_clip runs inference on every sample for each
+    # quantizable weight, so keep this low. The clip search internally subsamples
+    # to max_tokens=64 anyway.
+    num_calib_samples = 32
+    calib_seq_len = 128
+    block_size = 128
+
+    calib_reader = C4CalibrationDataReader(SOURCE_DIR, num_calib_samples, calib_seq_len)
+
+    print(f"\nQuantizing {onnx_path} with INT4 AWQ (block_size={block_size}) ...")
+    print("  Excluding: /lm_head (default)")
+    print("  Calibration EP: CUDAExecutionProvider")
+
+    quantized_model = quantize(
+        str(onnx_path),
+        calibration_method="awq_clip",
+        calibration_data_reader=calib_reader,
+        calibration_eps=["cuda", "cpu"],
+        use_external_data_format=True,
+        block_size=block_size,
+        nodes_to_exclude=[r"/lm_head"],
+    )
+
+    # Upgrade opset to 21 if needed (INT4 DequantizeLinear requires opset >= 21)
+    current_opset = max(
+        o.version for o in quantized_model.opset_import if o.domain == ""
+    )
+    if current_opset < 21:
+        print(
+            f"Upgrading opset from {current_opset} to 21 (required for INT4 DQ nodes)"
+        )
+        for opset in quantized_model.opset_import:
+            if opset.domain == "":
+                opset.version = 21
+
+    print(f"\nSaving quantized model to {onnx_path} ...")
+    _patched_save_onnx(quantized_model, str(onnx_path), save_as_external_data=True)
+
+    print("\nINT4 AWQ quantization complete")
+    print(f"  Output: {onnx_path}")
+
+
+if __name__ == "__main__":
+    onnx_path = export_fp16()
+    quantize_int4(onnx_path)

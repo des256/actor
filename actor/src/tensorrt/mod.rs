@@ -50,7 +50,7 @@ pub(crate) fn last_error() -> String {
     }
 }
 
-mod ffi;
+pub mod ffi;
 
 mod buffer;
 pub use buffer::*;

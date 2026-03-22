@@ -1,20 +1,18 @@
 import sys
 from pathlib import Path
-
 import torch
 from transformers import MoonshineStreamingForConditionalGeneration
+import onnx
 
-source_dir = sys.argv[1]
-export_dir = Path(sys.argv[2])
+temp_dir = sys.argv[1]
 
-print(f"Loading model from {source_dir} ...")
+print(f"loading model from source/...")
 # Eager attention avoids SymBool tracing issues with SDPA during export.
 model = MoonshineStreamingForConditionalGeneration.from_pretrained(
-    source_dir,
+    "source/",
     attn_implementation="eager",
 )
 model.eval()
-
 
 DEPTH = 14  # decoder_num_hidden_layers
 NHEADS = 10  # decoder_num_attention_heads
@@ -56,16 +54,15 @@ class DecoderWithKVCache(torch.nn.Module):
         return logits, new_k, new_v
 
 
-# -- Encoder --
 encoder = model.get_encoder()
 dummy_audio = torch.randn(1, 16000)
 dummy_mask = torch.ones(1, 16000, dtype=torch.long)
 
-print("Exporting encoder ...")
+print("exporting encoder...")
 torch.onnx.export(
     encoder,
     (dummy_audio, dummy_mask),
-    str(export_dir / "encoder_model.onnx"),
+    str(f"{temp_dir}/encoder.onnx"),
     input_names=["input_values", "attention_mask"],
     output_names=["last_hidden_state", "encoder_attention_mask"],
     dynamic_axes={
@@ -77,7 +74,6 @@ torch.onnx.export(
     opset_version=18,
 )
 
-# -- Decoder (with KV cache) --
 with torch.no_grad():
     enc_out = encoder(input_values=dummy_audio, attention_mask=dummy_mask)
 enc_hidden = enc_out.last_hidden_state
@@ -89,11 +85,11 @@ v_past = torch.zeros(DEPTH, 1, NHEADS, 1, HEAD_DIM)
 dec_wrapper = DecoderWithKVCache(model)
 dec_wrapper.eval()
 
-print("Exporting decoder (with KV cache) ...")
+print("exporting decoder...")
 torch.onnx.export(
     dec_wrapper,
     (dec_ids, enc_hidden, enc_attn_mask, k_past, v_past),
-    str(export_dir / "decoder_model.onnx"),
+    str(f"{temp_dir}/decoder.onnx"),
     input_names=[
         "input_ids",
         "encoder_hidden_states",
@@ -116,4 +112,25 @@ torch.onnx.export(
 )
 
 del model, encoder, dec_wrapper
-print("ONNX export complete.")
+
+PROTO_LIMIT = 2 * 1024**3  # 2 GB protobuf serialization ceiling
+
+for onnx_file in sorted(Path(temp_dir).glob("*.onnx")):
+    print(f"consolidating {onnx_file.name} ...")
+    proto = onnx.load(str(onnx_file), load_external_data=True)
+    dst = f"ckpt/{onnx_file.name}"
+    if proto.ByteSize() < PROTO_LIMIT:
+        onnx.save(proto, dst)
+    else:
+        # Model exceeds 2 GB — must use external data so protobuf doesn't
+        # silently corrupt the file.  trtexec handles this transparently.
+        onnx.save_model(
+            proto,
+            str(dst),
+            save_as_external_data=True,
+            all_tensors_to_one_file=True,
+            location=dst.stem + ".onnx_data",
+        )
+    del proto
+
+print("checkpoints exported.")

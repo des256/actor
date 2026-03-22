@@ -4,7 +4,7 @@ use std::time::Instant;
 #[tokio::main]
 async fn main() {
     // load wav file
-    let mut reader = hound::WavReader::open("moonshine.wav").expect("Failed to open test.wav");
+    let mut reader = hound::WavReader::open("moonshine.wav").expect("Failed to open moonshine.wav");
     let spec = reader.spec();
     assert_eq!(
         spec.sample_rate, 16000,
@@ -27,7 +27,7 @@ async fn main() {
     let (moonshine_handle, mut moonshine_listener) = moonshine::create::<()>(&tensorrt);
     println!("Model loaded.");
 
-    // send audio in 100ms chunks
+    // split audio in 100ms chunks
     let chunk_size = 1600;
     let chunks: Vec<Vec<i16>> = samples.chunks(chunk_size).map(|c| c.to_vec()).collect();
     let num_chunks = chunks.len();
@@ -63,7 +63,8 @@ async fn main() {
                 }
                 println!("final: {}", utterance);
                 println!("latency: {:?}", first_result.unwrap());
-                break;
+                // Use _exit to bypass C++ atexit handlers that crash during TensorRT cleanup
+                unsafe { libc::_exit(0) };
             }
         }
     }

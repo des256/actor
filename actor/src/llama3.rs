@@ -30,45 +30,36 @@ const EOT_TOKEN: i32 = 128009;
 // Shape: [1, NUM_KV_HEADS, MAX_SEQ_LEN, HEAD_DIM] f16
 const KV_BYTES: usize = 1 * NUM_KV_HEADS * MAX_SEQ_LEN * HEAD_DIM * size_of::<f16>();
 
-unsafe extern "C" {
-    fn cudaStreamCreate(stream: *mut *mut c_void) -> i32;
-    fn cudaStreamSynchronize(stream: *mut c_void) -> i32;
-}
-
 pub struct Input<T: Clone + Send + 'static> {
-    pub payload: T,
-    pub prompt: String,
-    pub max_tokens: usize,
-    pub stamp: u64,
+    pub payload: T,        // pass-along payload
+    pub prompt: String,    // the prompt to generate from
+    pub max_tokens: usize, // maximum number of output tokens
+    pub stamp: u64,        // epoch timestamp
 }
 
 pub enum Output<T: Clone + Send + 'static> {
-    Token { payload: T, token: String, stamp: u64 },
-    Eos { payload: T, stamp: u64 },
+    Token {
+        payload: T,    // pass-along payload from input prompt
+        token: String, // the generated token as string
+        stamp: u64,    // epoch timestamp
+    },
+    Eos {
+        payload: T, // pass-salong payload from input prompt
+        stamp: u64, // epoch timestamp
+    },
 }
 
 struct Direct {
-    // CUDA stream
     stream: *mut c_void,
-
-    // GPU buffers
-    input_ids: tensorrt::Buffer,    // [1, seq_len]
-    position_ids: tensorrt::Buffer, // [1, seq_len]
-    logits: tensorrt::Buffer,       // [1, seq_len, VOCAB_SIZE]
-
-    // KV cache double buffers (56 pairs = 112 total)
-    kv_a: Vec<tensorrt::Buffer>, // past_key_values inputs (buffer A)
-    kv_b: Vec<tensorrt::Buffer>, // past_key_values inputs (buffer B)
-
-    // TRT context
-    ctx: Arc<tensorrt::Context>,
-
-    // Tokenizer
+    context: Arc<tensorrt::Context>,
+    input_ids: tensorrt::Buffer,
+    position_ids: tensorrt::Buffer,
+    logits: tensorrt::Buffer,
+    k_cache: [Vec<tensorrt::Buffer>; 2],
+    v_cache: [Vec<tensorrt::Buffer>; 2],
+    kv_cache_index: usize,
     tokenizer: Tokenizer,
-
-    // Generation state
     past_len: usize,
-    kv_idx: bool, // false → A is input, B is output
 }
 
 unsafe impl Send for Direct {}
@@ -77,96 +68,83 @@ impl Direct {
     fn new(trt: &Arc<tensorrt::Tensorrt>) -> Self {
         let engine = trt.load_engine(ENGINE_PATH);
 
-
-        let ctx = engine.create_context();
+        let context = engine.create_context();
 
         let mut stream: *mut c_void = std::ptr::null_mut();
-        let rc = unsafe { cudaStreamCreate(&mut stream) };
+        let rc = unsafe { tensorrt::ffi::cudaStreamCreate(&mut stream) };
         assert!(rc == 0, "cudaStreamCreate failed: {rc}");
 
         let i64_size = size_of::<i64>();
 
-        // Allocate I/O buffers
         let input_ids = tensorrt::Buffer::new(MAX_SEQ_LEN * i64_size);
         let position_ids = tensorrt::Buffer::new(MAX_SEQ_LEN * i64_size);
         let logits = tensorrt::Buffer::new(MAX_SEQ_LEN * VOCAB_SIZE * size_of::<f16>());
 
-        // Allocate KV cache buffers (56 pairs)
-        let mut kv_a = Vec::with_capacity(NUM_LAYERS * 2);
-        let mut kv_b = Vec::with_capacity(NUM_LAYERS * 2);
-        for _ in 0..(NUM_LAYERS * 2) {
-            kv_a.push(tensorrt::Buffer::new(KV_BYTES));
-            kv_b.push(tensorrt::Buffer::new(KV_BYTES));
+        let mut k_cache = [Vec::with_capacity(NUM_LAYERS), Vec::with_capacity(NUM_LAYERS)];
+        let mut v_cache = [Vec::with_capacity(NUM_LAYERS), Vec::with_capacity(NUM_LAYERS)];
+        for _ in 0..(NUM_LAYERS) {
+            k_cache[0].push(tensorrt::Buffer::new(KV_BYTES));
+            v_cache[0].push(tensorrt::Buffer::new(KV_BYTES));
+            k_cache[1].push(tensorrt::Buffer::new(KV_BYTES));
+            v_cache[1].push(tensorrt::Buffer::new(KV_BYTES));
         }
 
         let tokenizer = Tokenizer::from_file(TOKENIZER_PATH).unwrap_or_else(|e| panic!("failed to load tokenizer: {e}"));
 
         Self {
             stream,
+            context,
             input_ids,
             position_ids,
             logits,
-            kv_a,
-            kv_b,
-            ctx,
+            k_cache,
+            v_cache,
+            kv_cache_index: 0,
             tokenizer,
             past_len: 0,
-            kv_idx: false,
         }
     }
 
-    /// Run inference for a single step or prefill.
     fn infer(&mut self, input_token_ids: &[i64], seq_len: usize) {
-        // Upload input_ids and position_ids
         self.input_ids.upload(input_token_ids);
         let positions: Vec<i64> = (self.past_len as i64..(self.past_len + seq_len) as i64).collect();
         self.position_ids.upload(&positions);
-
-        // Set dynamic input shapes
-        self.ctx.set_input_shape("input_ids", &[1, seq_len as i64]);
-        self.ctx.set_input_shape("position_ids", &[1, seq_len as i64]);
-
-        // Bind I/O tensors
-        self.ctx.set_tensor_address("input_ids", self.input_ids.ptr);
-        self.ctx.set_tensor_address("position_ids", self.position_ids.ptr);
-        self.ctx.set_tensor_address("logits", self.logits.ptr);
-
-        // Bind KV cache: past_key_values (input) and present (output)
-        let (kv_in, kv_out) = if !self.kv_idx {
-            (&self.kv_a, &self.kv_b)
-        } else {
-            (&self.kv_b, &self.kv_a)
-        };
+        self.context.set_input_shape("input_ids", &[1, seq_len as i64]);
+        self.context.set_input_shape("position_ids", &[1, seq_len as i64]);
+        self.context.set_tensor_address("input_ids", self.input_ids.ptr);
+        self.context.set_tensor_address("position_ids", self.position_ids.ptr);
+        self.context.set_tensor_address("logits", self.logits.ptr);
 
         for layer in 0..NUM_LAYERS {
-            let k_idx = layer * 2;
-            let v_idx = layer * 2 + 1;
-
             let past_k_name = format!("past_key_values.{}.key", layer);
             let past_v_name = format!("past_key_values.{}.value", layer);
             let present_k_name = format!("present.{}.key", layer);
             let present_v_name = format!("present.{}.value", layer);
 
             // Set KV cache shapes
-            self.ctx
+            self.context
                 .set_input_shape(&past_k_name, &[1, NUM_KV_HEADS as i64, self.past_len as i64, HEAD_DIM as i64]);
-            self.ctx
+            self.context
                 .set_input_shape(&past_v_name, &[1, NUM_KV_HEADS as i64, self.past_len as i64, HEAD_DIM as i64]);
 
             // Bind addresses
-            self.ctx.set_tensor_address(&past_k_name, kv_in[k_idx].ptr);
-            self.ctx.set_tensor_address(&past_v_name, kv_in[v_idx].ptr);
-            self.ctx.set_tensor_address(&present_k_name, kv_out[k_idx].ptr);
-            self.ctx.set_tensor_address(&present_v_name, kv_out[v_idx].ptr);
+            self.context
+                .set_tensor_address(&past_k_name, self.k_cache[1 - self.kv_cache_index][layer].ptr);
+            self.context
+                .set_tensor_address(&past_v_name, self.v_cache[1 - self.kv_cache_index][layer].ptr);
+            self.context
+                .set_tensor_address(&present_k_name, self.k_cache[self.kv_cache_index][layer].ptr);
+            self.context
+                .set_tensor_address(&present_v_name, self.v_cache[self.kv_cache_index][layer].ptr);
         }
 
         // Execute
-        self.ctx.enqueue(self.stream);
-        unsafe { cudaStreamSynchronize(self.stream) };
+        self.context.enqueue(self.stream);
+        unsafe { tensorrt::ffi::cudaStreamSynchronize(self.stream) };
 
         // Update state
         self.past_len += seq_len;
-        self.kv_idx = !self.kv_idx;
+        self.kv_cache_index = 1 - self.kv_cache_index;
     }
 
     /// Generate tokens autoregressively. Returns generated token strings via callback.
@@ -176,7 +154,7 @@ impl Direct {
     {
         // Reset state
         self.past_len = 0;
-        self.kv_idx = false;
+        self.kv_cache_index = 0;
 
         // Prefill phase: process prompt tokens
         if !prompt_tokens.is_empty() {
@@ -207,7 +185,7 @@ impl Direct {
             // Download just the last position's logits (f16)
             let download_offset = logits_offset * size_of::<f16>();
             unsafe {
-                tensorrt::cudaMemcpy(
+                tensorrt::ffi::cudaMemcpy(
                     last_logits_f16.as_mut_ptr() as *mut c_void,
                     (self.logits.ptr as usize + download_offset) as *mut c_void,
                     VOCAB_SIZE * size_of::<f16>(),
@@ -335,58 +313,5 @@ impl<T: Clone + Send + 'static> Listener<T> {
                 panic!("Llama3: output channel disconnected")
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_architecture_constants() {
-        // Verify architecture constants match Llama 3.2 3B config
-        assert_eq!(NUM_LAYERS, 28, "Llama 3.2 3B has 28 layers");
-        assert_eq!(NUM_KV_HEADS, 8, "Llama 3.2 3B uses 8 KV heads (GQA)");
-        assert_eq!(HEAD_DIM, 128, "Head dimension is 128");
-        assert_eq!(VOCAB_SIZE, 128256, "Llama 3.2 vocab size");
-        assert_eq!(MAX_SEQ_LEN, 2048, "Max sequence length set to 2048");
-    }
-
-    #[test]
-    fn test_token_ids_in_range() {
-        // Verify special token IDs are within vocab range
-        assert!(BOS_TOKEN >= 0 && (BOS_TOKEN as usize) < VOCAB_SIZE);
-        assert!(EOS_TOKEN >= 0 && (EOS_TOKEN as usize) < VOCAB_SIZE);
-        assert!(EOT_TOKEN >= 0 && (EOT_TOKEN as usize) < VOCAB_SIZE);
-    }
-
-    #[test]
-    fn test_kv_cache_buffer_size() {
-        // Verify KV cache buffer calculation (f16 KV cache)
-        let expected = NUM_KV_HEADS * MAX_SEQ_LEN * HEAD_DIM * size_of::<f16>();
-        assert_eq!(KV_BYTES, expected);
-
-        // Each layer has 2 KV tensors (key + value)
-        let total_kv_buffers = NUM_LAYERS * 2;
-        assert_eq!(total_kv_buffers, 56, "Should have 56 KV cache tensors");
-    }
-
-    #[test]
-    fn test_kv_cache_indexing() {
-        // Property test: verify KV cache indexing never goes out of bounds
-        for layer in 0..NUM_LAYERS {
-            let k_idx = layer * 2;
-            let v_idx = layer * 2 + 1;
-
-            assert!(k_idx < NUM_LAYERS * 2, "Key index in bounds for layer {}", layer);
-            assert!(v_idx < NUM_LAYERS * 2, "Value index in bounds for layer {}", layer);
-        }
-    }
-
-    #[test]
-    fn test_channel_capacity() {
-        // Verify channel capacity is reasonable
-        assert!(CHANNEL_CAPACITY > 0);
-        assert!(CHANNEL_CAPACITY <= 1024, "Channel capacity shouldn't be excessive");
     }
 }

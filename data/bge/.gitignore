@@ -1,2 +1,3 @@
-source/*
+.ruff_cache/
+source/
 onnx/

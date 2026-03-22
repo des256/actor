@@ -1,0 +1,15 @@
+huggingface_hub
+torch
+transformers
+onnx
+onnxruntime-gpu
+nvidia-modelopt
+onnx_graphsurgeon
+ml_dtypes
+onnxslim
+onnxscript
+lief
+datasets
+cupy
+cppimport
+pocket_tts
