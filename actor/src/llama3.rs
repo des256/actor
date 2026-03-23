@@ -20,7 +20,7 @@ const NUM_LAYERS: usize = 28;
 const NUM_KV_HEADS: usize = 8;
 const HEAD_DIM: usize = 128;
 const VOCAB_SIZE: usize = 128256;
-const MAX_SEQ_LEN: usize = 128;
+const MAX_SEQ_LEN: usize = 512;
 
 // Token IDs
 const BOS_TOKEN: i32 = 128000;

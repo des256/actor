@@ -57,18 +57,18 @@ if [ "$REBUILD" == true ] || [ ! -d "engine" ]; then
     NUM_KV_HEADS=8
     HEAD_DIM=128
     min_shapes="input_ids:1x1,position_ids:1x1"
-    opt_shapes="input_ids:1x64,position_ids:1x64"
-    max_shapes="input_ids:1x128,position_ids:1x128"
+    opt_shapes="input_ids:1x256,position_ids:1x256"
+    max_shapes="input_ids:1x512,position_ids:1x512"
     for i in $(seq 0 $((NUM_LAYERS - 1))); do
         # KV cache shapes: [batch=1, num_kv_heads=8, seq_len, head_dim=128]
         min_shapes="${min_shapes},past_key_values.${i}.key:1x${NUM_KV_HEADS}x0x${HEAD_DIM}"
         min_shapes="${min_shapes},past_key_values.${i}.value:1x${NUM_KV_HEADS}x0x${HEAD_DIM}"
 
-        opt_shapes="${opt_shapes},past_key_values.${i}.key:1x${NUM_KV_HEADS}x64x${HEAD_DIM}"
-        opt_shapes="${opt_shapes},past_key_values.${i}.value:1x${NUM_KV_HEADS}x64x${HEAD_DIM}"
+        opt_shapes="${opt_shapes},past_key_values.${i}.key:1x${NUM_KV_HEADS}x256x${HEAD_DIM}"
+        opt_shapes="${opt_shapes},past_key_values.${i}.value:1x${NUM_KV_HEADS}x256x${HEAD_DIM}"
 
-        max_shapes="${max_shapes},past_key_values.${i}.key:1x${NUM_KV_HEADS}x128x${HEAD_DIM}"
-        max_shapes="${max_shapes},past_key_values.${i}.value:1x${NUM_KV_HEADS}x128x${HEAD_DIM}"
+        max_shapes="${max_shapes},past_key_values.${i}.key:1x${NUM_KV_HEADS}x512x${HEAD_DIM}"
+        max_shapes="${max_shapes},past_key_values.${i}.value:1x${NUM_KV_HEADS}x512x${HEAD_DIM}"
     done
     trtexec \
         --onnx="ckpt/model_int8.onnx" \
@@ -77,8 +77,8 @@ if [ "$REBUILD" == true ] || [ ! -d "engine" ]; then
         --optShapes="${opt_shapes}" \
         --maxShapes="${max_shapes}" \
         --stronglyTyped \
-        --builderOptimizationLevel=3 \
-        --memPoolSize=workspace:4096 \
+        --builderOptimizationLevel=2 \
+        --memPoolSize=workspace:1024 \
         --skipInference \
         --verbose ||
         exit 1
