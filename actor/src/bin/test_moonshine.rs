@@ -32,6 +32,24 @@ async fn main() {
     let chunks: Vec<Vec<i16>> = samples.chunks(chunk_size).map(|c| c.to_vec()).collect();
     let num_chunks = chunks.len();
 
+    // warmup with 5 chunks
+    println!("warming up...");
+    for i in 0..5 {
+        moonshine_handle.send(moonshine::Input {
+            payload: (),
+            audio: chunks[i].clone(),
+            flush: i == 4,
+        });
+    }
+    loop {
+        match moonshine_listener.recv().await {
+            moonshine::Output::Partial { .. } => {}
+            moonshine::Output::Final { .. } => {
+                break;
+            }
+        }
+    }
+
     // test Moonshine
     let start = Instant::now();
     let mut first_result = None;
