@@ -8,7 +8,7 @@ use {
     },
 };
 
-const VOICE_PATH: &str = "data/tts/voices/hannah.bin";
+const VOICE_PATH: &str = "data/pocket/voices/hannah.bin";
 const ASR_SAMPLE_RATE: usize = 16000;
 const VAD_FRAME_SIZE: usize = 512;
 const VAD_FRAMES_PER_CHUNK: usize = 8;
@@ -30,27 +30,11 @@ struct AsrPayload {
 }
 
 #[derive(Clone)]
-struct IntentPayload {
-    user_speech_end: Instant, // when user stopped speaking
-    user_sentence: String,    // the full utterance
-}
-
-#[derive(Clone)]
 struct ChatPayload {
     user_speech_end: Instant, // when user stopped speaking
     user_sentence: String,    // the full utterance
     user_intent: String,      // the intent of the user's utterance
     prompt_id: u64,           // assigned prompt ID
-}
-
-#[derive(Clone)]
-struct NuancePayload {
-    user_speech_end: Instant,  // when user stopped speaking
-    user_sentence: String,     // the full utterance
-    user_intent: String,       // the intent of the user's utterance
-    prompt_id: u64,            // assigned prompt ID
-    response_id: u64,          // assigned response ID
-    response_sentence: String, // the current response sentence
 }
 
 #[derive(Clone)]
@@ -104,11 +88,25 @@ fn strip_markers(text: &str) -> String {
     result
 }
 
+const INTENTS: [&str; 3] = ["greeting", "statement", "question"];
+const NUANCES: [&str; 9] = [
+    "happy",
+    "formal",
+    "frustrated",
+    "sad",
+    "angry",
+    "sarcastic",
+    "excited",
+    "surprised",
+    "confused",
+];
+
 #[tokio::main]
 async fn main() {
     // prepare pipeline components
     let epoch = Arc::new(Epoch::new());
     let onnx = onnx::Onnx::new(24);
+    let tensorrt = tensorrt::Tensorrt::new();
 
     println!("initializing audio...");
     let mut audioin_listener = audioin::create(ASR_SAMPLE_RATE, VAD_FRAMES_PER_CHUNK * VAD_FRAME_SIZE, None, 3);
@@ -116,31 +114,30 @@ async fn main() {
         audioout::create::<AudioOutPayload>(TTS_SAMPLE_RATE, TTS_CHUNK_SIZE, None, &epoch);
     let audioout_handle = Arc::new(audioout_handle);
 
-    print!("loading VAD...");
+    print!("loading VAD (Silero)...");
     stdout().flush().unwrap();
     let mut vad = vad::Vad::new(&onnx, onnx::Executor::Cpu, ASR_SAMPLE_RATE);
     println!(" done.");
-    print!("loading ASR...");
+    print!("loading ASR (Moonshine STT)...");
     stdout().flush().unwrap();
-    let (asr_handle, mut asr_listener) = parakeet::create::<AsrPayload>(&onnx, onnx::Executor::Cuda(0));
+    let (asr_handle, mut asr_listener) = moonshine::create::<AsrPayload>(&tensorrt);
     let asr_handle = Arc::new(asr_handle);
     println!(" done.");
-    print!("loading Intent, Chat and Nuance SLMs...");
+    print!("loading LLM (Llama 3.2 Instruct)...");
     stdout().flush().unwrap();
-    let slm_core = Arc::new(slm::Core::new(&onnx, onnx::Executor::Cuda(0), slm::Model::Llama33b));
-    let (intent_handle, mut intent_listener) = slm::create::<IntentPayload>(&slm_core, &epoch);
-    let intent_handle = Arc::new(intent_handle);
-    let (chat_handle, mut chat_listener) = slm::create::<ChatPayload>(&slm_core, &epoch);
-    let chat_handle = Arc::new(chat_handle);
-    let (nuance_handle, mut nuance_listener) = slm::create::<NuancePayload>(&slm_core, &epoch);
-    let nuance_handle = Arc::new(nuance_handle);
+    let (llm_handle, mut llm_listener) = llama3::create::<ChatPayload>(&tensorrt, &epoch);
+    let llm_handle = Arc::new(llm_handle);
     println!(" done.");
-    print!("loading TTS...");
+    print!("loading TTS (Pocket TTS)...");
     stdout().flush().unwrap();
     let trt = tensorrt::Tensorrt::new();
     let (tts_handle, mut tts_listener) = pocket::create::<TtsPayload>(&trt, VOICE_PATH, &epoch);
     let tts_handle = Arc::new(tts_handle);
     println!(" done.");
+
+    let bge = Arc::new(bge::Bge::new(&onnx, onnx::Executor::Cpu).unwrap());
+    let intents: Vec<bge::Embedding> = INTENTS.iter().map(|intent| bge.embed(intent).unwrap()).collect();
+    let nuances: Vec<bge::Embedding> = NUANCES.iter().map(|nuance| bge.embed(nuance).unwrap()).collect();
 
     let history = Arc::new(history::History::new());
 
@@ -209,7 +206,7 @@ async fn main() {
                 }
                 if speech_started {
                     for chunk in preroll.drain(..) {
-                        asr_handle.send(parakeet::Input {
+                        asr_handle.send(moonshine::Input {
                             payload: AsrPayload { user_speech_end },
                             audio: chunk,
                             flush: false,
@@ -221,7 +218,7 @@ async fn main() {
                     in_speech = true;
                 }
                 if in_speech || speech_started {
-                    asr_handle.send(parakeet::Input {
+                    asr_handle.send(moonshine::Input {
                         payload: AsrPayload { user_speech_end },
                         audio,
                         flush: speech_ended,
@@ -239,101 +236,41 @@ async fn main() {
     // ASR pump
     tokio::spawn({
         let epoch = Arc::clone(&epoch);
-        let intent_handle = Arc::clone(&intent_handle);
-        async move {
-            loop {
-                match asr_listener.recv().await {
-                    parakeet::Output::Partial { payload: _, utterance } => {
-                        println!("({}...)", utterance);
-                    }
-                    parakeet::Output::Final { payload, utterance } => {
-                        if !utterance.is_empty() {
-                            intent_handle.send(slm::Input {
-                                payload: IntentPayload {
-                                    user_speech_end: payload.user_speech_end,
-                                    user_sentence: utterance.clone(),
-                                },
-                                prompt: prompt::build_slm_intent(slm::Model::Smollm3, &utterance).await,
-                                stamp: epoch.current(),
-                                max_tokens: 10,
-                            });
-                        }
-                    }
-                }
-            }
-        }
-    });
-
-    // Intent pump
-    tokio::spawn({
-        let epoch = Arc::clone(&epoch);
-        let chat_handle = Arc::clone(&chat_handle);
+        let llm_handle = Arc::clone(&llm_handle);
         let history = Arc::clone(&history);
+        let bge = Arc::clone(&bge);
         async move {
             let mut prompt_id = 0u64;
-            let mut intent = String::new();
             loop {
-                #[allow(unused_assignments)]
-                let mut user_speech_end = Instant::now();
-                #[allow(unused_assignments)]
-                let mut user_sentence = String::new();
-                #[allow(unused_assignments)]
-                let mut intent_stamp = 0u64;
-                let mut needs_drain = false;
-                loop {
-                    match intent_listener.recv().await {
-                        slm::Output::Token { payload, token, stamp } => {
-                            if stamp != epoch.current() {
-                                intent.clear();
-                                continue;
-                            }
-                            if token.contains('}') {
-                                user_speech_end = payload.user_speech_end;
-                                user_sentence = payload.user_sentence;
-                                intent_stamp = stamp;
-                                needs_drain = true;
-                                break;
-                            }
-                            intent.push_str(&token);
-                        }
-                        slm::Output::Eos { payload, stamp } => {
-                            if stamp != epoch.current() {
-                                intent.clear();
-                                continue;
-                            }
-                            user_speech_end = payload.user_speech_end;
-                            user_sentence = payload.user_sentence;
-                            intent_stamp = stamp;
-                            break;
+                match asr_listener.recv().await {
+                    moonshine::Output::Partial { payload: _, utterance } => {
+                        println!("({}...)", utterance);
+                    }
+                    moonshine::Output::Final { payload, utterance } => {
+                        if !utterance.is_empty() {
+                            let intents = bge.embed(&utterance).unwrap().similarities(&intents);
+                            let mut sorted_intents = intents.iter().zip(INTENTS).collect::<Vec<_>>();
+                            sorted_intents.sort_by(|a, b| b.0.partial_cmp(a.0).unwrap_or(std::cmp::Ordering::Equal));
+                            let intent = format!("{}, {}", sorted_intents[0].1, sorted_intents[1].1);
+                            println!("--> {} ({})", utterance, intent);
+                            history.add(history::Role::User(0), utterance.clone()).await;
+                            let prompt = llm_handle.build_prompt(identity, &personality, tools, facts, &history).await;
+                            llm_handle.send(llama3::Input {
+                                payload: ChatPayload {
+                                    user_speech_end: payload.user_speech_end,
+                                    user_sentence: utterance.clone(),
+                                    user_intent: intent,
+                                    prompt_id,
+                                },
+                                prompt,
+                                stamp: epoch.current(),
+                                max_tokens: 50,
+                                temperature: 0.0,
+                            });
+                            prompt_id += 1;
                         }
                     }
                 }
-                // drain remaining tokens from this SLM run until EOS
-                if needs_drain {
-                    loop {
-                        match intent_listener.recv().await {
-                            slm::Output::Eos { .. } => break,
-                            slm::Output::Token { .. } => continue,
-                        }
-                    }
-                }
-                let trimmed = intent.split(|c: char| !c.is_alphanumeric()).next().unwrap_or("").to_string();
-                println!("--> {} ({})", user_sentence, trimmed);
-                history.add(history::Role::User(0), user_sentence.clone()).await;
-                let prompt = prompt::build_slm_main(slm::Model::Llama33b, identity, &personality, tools, facts, &history).await;
-                chat_handle.send(slm::Input {
-                    payload: ChatPayload {
-                        user_speech_end,
-                        user_sentence,
-                        user_intent: trimmed,
-                        prompt_id,
-                    },
-                    prompt,
-                    stamp: intent_stamp,
-                    max_tokens: 50,
-                });
-                intent.clear();
-                prompt_id += 1;
             }
         }
     });
@@ -341,14 +278,14 @@ async fn main() {
     // Chat pump
     tokio::spawn({
         let epoch = Arc::clone(&epoch);
-        let nuance_handle = Arc::clone(&nuance_handle);
+        let tts_handle = Arc::clone(&tts_handle);
         async move {
             let mut current_prompt_id = u64::MAX;
             let mut current_response = String::new();
             let mut response_id = 0u64;
             loop {
-                match chat_listener.recv().await {
-                    slm::Output::Token { payload, token, stamp } => {
+                match llm_listener.recv().await {
+                    llama3::Output::Token { payload, token, stamp } => {
                         if stamp != epoch.current() {
                             current_response.clear();
                             continue;
@@ -361,25 +298,29 @@ async fn main() {
                                     current_prompt_id = payload.prompt_id;
                                     response_id = 0;
                                 }
-                                nuance_handle.send(slm::Input {
-                                    payload: NuancePayload {
+                                let nuances = bge.embed(&trimmed).unwrap().similarities(&nuances); // potentially blocking?
+                                let mut sorted_nuances = nuances.iter().zip(NUANCES).collect::<Vec<_>>();
+                                sorted_nuances.sort_by(|a, b| b.0.partial_cmp(a.0).unwrap_or(std::cmp::Ordering::Equal));
+                                let nuance = format!("{}, {}", sorted_nuances[0].1, sorted_nuances[1].1);
+                                tts_handle.send(pocket::Input {
+                                    payload: TtsPayload {
                                         user_speech_end: payload.user_speech_end,
-                                        user_sentence: payload.user_sentence,
-                                        user_intent: payload.user_intent,
+                                        user_sentence: payload.user_sentence.clone(),
+                                        user_intent: payload.user_intent.clone(),
                                         prompt_id: payload.prompt_id,
                                         response_id,
                                         response_sentence: trimmed.clone(),
+                                        response_nuance: nuance,
                                     },
-                                    prompt: prompt::build_slm_nuance(slm::Model::Llama33b, &trimmed).await,
-                                    stamp,
-                                    max_tokens: 10,
+                                    sentence: strip_markers(&trimmed).to_string(),
+                                    stamp: epoch.current(),
                                 });
                                 current_response.clear();
                                 response_id += 1;
                             }
                         }
                     }
-                    slm::Output::Eos { payload, stamp } => {
+                    llama3::Output::Eos { payload, stamp } => {
                         if stamp != epoch.current() {
                             current_response.clear();
                             continue;
@@ -390,110 +331,28 @@ async fn main() {
                                 current_prompt_id = payload.prompt_id;
                                 response_id = 0;
                             }
-                            nuance_handle.send(slm::Input {
-                                payload: NuancePayload {
+                            let nuances = bge.embed(&trimmed).unwrap().similarities(&nuances); // potentially blocking?
+                            let mut sorted_nuances = nuances.iter().zip(NUANCES).collect::<Vec<_>>();
+                            sorted_nuances.sort_by(|a, b| b.0.partial_cmp(a.0).unwrap_or(std::cmp::Ordering::Equal));
+                            let nuance = format!("{}, {}", sorted_nuances[0].1, sorted_nuances[1].1);
+                            tts_handle.send(pocket::Input {
+                                payload: TtsPayload {
                                     user_speech_end: payload.user_speech_end,
-                                    user_sentence: payload.user_sentence,
-                                    user_intent: payload.user_intent,
+                                    user_sentence: payload.user_sentence.clone(),
+                                    user_intent: payload.user_intent.clone(),
                                     prompt_id: payload.prompt_id,
                                     response_id,
                                     response_sentence: trimmed.clone(),
+                                    response_nuance: nuance,
                                 },
-                                prompt: prompt::build_slm_nuance(slm::Model::Llama33b, &trimmed).await,
-                                stamp,
-                                max_tokens: 10,
+                                sentence: strip_markers(&trimmed).to_string(),
+                                stamp: epoch.current(),
                             });
                             current_response.clear();
                             response_id += 1;
                         }
                     }
                 }
-            }
-        }
-    });
-
-    // Nuance pump
-    tokio::spawn({
-        let epoch = Arc::clone(&epoch);
-        let tts_handle = Arc::clone(&tts_handle);
-        async move {
-            let mut nuance = String::new();
-            loop {
-                #[allow(unused_assignments)]
-                let mut user_speech_end = Instant::now();
-                #[allow(unused_assignments)]
-                let mut user_sentence = String::new();
-                #[allow(unused_assignments)]
-                let mut user_intent = String::new();
-                #[allow(unused_assignments)]
-                let mut prompt_id = u64::MAX;
-                #[allow(unused_assignments)]
-                let mut response_id = u64::MAX;
-                #[allow(unused_assignments)]
-                let mut response_sentence = String::new();
-                #[allow(unused_assignments)]
-                let mut nuance_stamp = 0u64;
-                let mut needs_drain = false;
-                loop {
-                    match nuance_listener.recv().await {
-                        slm::Output::Token { payload, token, stamp } => {
-                            if stamp != epoch.current() {
-                                nuance.clear();
-                                continue;
-                            }
-                            if token.contains('}') {
-                                user_speech_end = payload.user_speech_end;
-                                user_sentence = payload.user_sentence.clone();
-                                user_intent = payload.user_intent.clone();
-                                prompt_id = payload.prompt_id;
-                                response_id = payload.response_id;
-                                response_sentence = payload.response_sentence.clone();
-                                nuance_stamp = stamp;
-                                needs_drain = true;
-                                break;
-                            }
-                            nuance.push_str(&token);
-                        }
-                        slm::Output::Eos { payload, stamp } => {
-                            if stamp != epoch.current() {
-                                nuance.clear();
-                                continue;
-                            }
-                            user_speech_end = payload.user_speech_end;
-                            user_sentence = payload.user_sentence.clone();
-                            user_intent = payload.user_intent.clone();
-                            prompt_id = payload.prompt_id;
-                            response_id = payload.response_id;
-                            response_sentence = payload.response_sentence.clone();
-                            nuance_stamp = stamp;
-                            break;
-                        }
-                    }
-                }
-                // drain remaining tokens from this SLM run until EOS
-                if needs_drain {
-                    loop {
-                        match nuance_listener.recv().await {
-                            slm::Output::Eos { .. } => break,
-                            slm::Output::Token { .. } => continue,
-                        }
-                    }
-                }
-                let trimmed = nuance.split(|c: char| !c.is_alphanumeric()).next().unwrap_or("").to_string();
-                tts_handle.send(pocket::Input {
-                    payload: TtsPayload {
-                        user_speech_end,
-                        user_sentence: user_sentence.clone(),
-                        user_intent,
-                        prompt_id,
-                        response_id,
-                        response_sentence: response_sentence.clone(),
-                        response_nuance: trimmed,
-                    },
-                    sentence: format!("    {}     ", strip_markers(&response_sentence)),
-                    stamp: nuance_stamp,
-                });
-                nuance.clear();
             }
         }
     });

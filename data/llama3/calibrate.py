@@ -101,7 +101,7 @@ def quantize():
         weight_type=QuantType.QInt8,
         calibrate_method=CalibrationMethod.MinMax,
         use_external_data_format=True,
-        calibration_providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
+        calibration_providers=["CPUExecutionProvider"],
         extra_options={
             "ActivationSymmetric": True,
             "WeightSymmetric": True,

@@ -34,7 +34,7 @@ impl Bge {
         Ok(Self { session, tokenizer })
     }
 
-    pub fn embed(&mut self, sentence: &str) -> Result<Embedding, Box<dyn std::error::Error>> {
+    pub fn embed(&self, sentence: &str) -> Result<Embedding, Box<dyn std::error::Error>> {
         // Tokenize input
         let encoding = self
             .tokenizer

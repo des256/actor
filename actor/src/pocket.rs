@@ -432,7 +432,13 @@ impl Direct {
 
     fn prepare(&mut self, sentence: &str) -> (Vec<i64>, usize) {
         let text = prepare_text(sentence);
-        let encoding = self.tokenizer.encode(text, false).expect("tokenize failed");
+        let encoding = match self.tokenizer.encode(text, false) {
+            Ok(enc) => enc,
+            Err(e) => {
+                eprintln!("pocket: tokenization failed for {:?}: {}", sentence, e);
+                return (vec![], 0);
+            }
+        };
         let tokens: Vec<i64> = encoding.get_ids().iter().map(|&id| id as i64).collect();
 
         let word_count = sentence.split_whitespace().count();
@@ -736,6 +742,17 @@ pub fn create<T: Clone + Send + 'static>(
 
                 // Tokenize and condition
                 let (tokens, eos_countdown_seed) = d.prepare(&input.sentence);
+                if tokens.is_empty() {
+                    eprintln!("pocket: skipping empty token sequence for {:?}", &input.sentence);
+                    let _ = output_tx.blocking_send(Output {
+                        payload: input.payload.clone(),
+                        audio: vec![],
+                        index: 0,
+                        last: true,
+                        stamp: input.stamp,
+                    });
+                    continue;
+                }
                 d.condition(&tokens);
 
                 // === Two-stream pipeline ===
