@@ -80,7 +80,7 @@ impl Direct {
 
         let input_ids = tensorrt::Buffer::new(MAX_SEQ_LEN * i64_size);
         let position_ids = tensorrt::Buffer::new(MAX_SEQ_LEN * i64_size);
-        let logits = tensorrt::Buffer::new(MAX_SEQ_LEN * VOCAB_SIZE * size_of::<f32>());
+        let logits = tensorrt::Buffer::new(MAX_SEQ_LEN * VOCAB_SIZE * size_of::<f16>());
 
         let mut k_cache = [Vec::with_capacity(NUM_LAYERS), Vec::with_capacity(NUM_LAYERS)];
         let mut v_cache = [Vec::with_capacity(NUM_LAYERS), Vec::with_capacity(NUM_LAYERS)];
@@ -183,17 +183,20 @@ impl Direct {
                 0
             };
 
-            let mut last_logits = vec![0.0f32; VOCAB_SIZE];
-            // Download just the last position's logits (f32)
-            let download_offset = logits_offset * size_of::<f32>();
+            let mut last_logits_f16 = vec![f16::ZERO; VOCAB_SIZE];
+            // Download just the last position's logits (f16)
+            let download_offset = logits_offset * size_of::<f16>();
             unsafe {
                 tensorrt::ffi::cudaMemcpy(
-                    last_logits.as_mut_ptr() as *mut c_void,
+                    last_logits_f16.as_mut_ptr() as *mut c_void,
                     (self.logits.ptr as usize + download_offset) as *mut c_void,
-                    VOCAB_SIZE * size_of::<f32>(),
+                    VOCAB_SIZE * size_of::<f16>(),
                     2, // D2H
                 );
             }
+
+            // Convert f16 to f32
+            let last_logits: Vec<f32> = last_logits_f16.iter().map(|x| x.to_f32()).collect();
 
             let next_token = if temperature <= 0.0 {
                 // Greedy: argmax

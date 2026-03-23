@@ -51,6 +51,7 @@ async fn main() {
     }
 
     // test Moonshine
+    println!("testing...");
     let start = Instant::now();
     let mut first_result = None;
     tokio::spawn({

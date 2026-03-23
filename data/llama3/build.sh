@@ -50,6 +50,9 @@ if [ "$REBUILD" == true ] || [ ! -d "engine" ]; then
     rm -rf engine
     mkdir -p engine
 
+    # quantize ONNX model with Q/DQ nodes (INT8 via ORT static quantization)
+    python3 calibrate.py || exit 1
+
     NUM_LAYERS=28
     NUM_KV_HEADS=8
     HEAD_DIM=128
@@ -68,14 +71,15 @@ if [ "$REBUILD" == true ] || [ ! -d "engine" ]; then
         max_shapes="${max_shapes},past_key_values.${i}.value:1x${NUM_KV_HEADS}x2048x${HEAD_DIM}"
     done
     trtexec \
-        --onnx="ckpt/model.onnx" \
+        --onnx="ckpt/model_int8.onnx" \
         --saveEngine="engine/model.engine" \
         --minShapes="${min_shapes}" \
         --optShapes="${opt_shapes}" \
         --maxShapes="${max_shapes}" \
-        --int8 --fp16 \
+        --stronglyTyped \
         --builderOptimizationLevel=3 \
         --memPoolSize=workspace:4096 \
+        --skipInference \
         --verbose ||
         exit 1
     cp source/tokenizer.json engine/

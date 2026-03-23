@@ -14,7 +14,23 @@ async fn main() {
     let (pocket_handle, mut pocket_listener) = pocket::create::<()>(&tensorrt, "data/pocket/voices/stephen.bin", &epoch);
     println!("Model loaded.");
 
+    // warmup
+    println!("warming up...");
+    let stamp = epoch.current();
+    pocket_handle.send(pocket::Input {
+        payload: (),
+        sentence: "Hi.".to_string(),
+        stamp,
+    });
+    loop {
+        let output = pocket_listener.recv().await;
+        if output.last {
+            break;
+        }
+    }
+
     // send sentence
+    println!("testing...");
     let start = Instant::now();
     let stamp = epoch.current();
     pocket_handle.send(pocket::Input {

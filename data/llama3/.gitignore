@@ -2,3 +2,5 @@ source/
 onnx/
 ckpt/
 engine/
+*.data
+*.onnx
