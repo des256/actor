@@ -24,7 +24,8 @@ Hi<|eot_id|><|start_header_id|>assistant<|end_header_id|>
         payload: (),
         prompt,
         stamp: epoch.current(),
-        max_tokens: 50,
+        max_tokens: 200,
+        temperature: 0.0,
     });
     while let llama3::Output::Token { .. } = llm_listener.recv().await {}
 
@@ -37,14 +38,15 @@ You're a useful assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>
 Hi, tell me something about cars<|eot_id|><|start_header_id|>assistant<|end_header_id|>
 
 "
-        .to_string();
+    .to_string();
     let start = Instant::now();
     let mut ttft_ms: Option<u64> = None;
     llm_handle.send(llama3::Input {
         payload: (),
         prompt,
         stamp: epoch.current(),
-        max_tokens: 50,
+        max_tokens: 200,
+        temperature: 0.0,
     });
     let mut response = String::new();
     loop {

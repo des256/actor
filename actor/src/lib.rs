@@ -19,7 +19,6 @@ pub mod llama3;
 pub mod moonshine;
 pub mod onnx;
 pub mod pocket;
-//pub mod prompt;
 pub mod tensorrt;
 pub mod vad;
 pub mod wsserver;

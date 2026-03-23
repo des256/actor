@@ -1,6 +1,7 @@
 use {
     crate::*,
     half::f16,
+    rand::Rng,
     std::{
         ffi::c_void,
         sync::{Arc, mpsc as std_mpsc},
@@ -34,6 +35,7 @@ pub struct Input<T: Clone + Send + 'static> {
     pub payload: T,        // pass-along payload
     pub prompt: String,    // the prompt to generate from
     pub max_tokens: usize, // maximum number of output tokens
+    pub temperature: f32,  // sampling temperature (0.0 = greedy, >0 = stochastic)
     pub stamp: u64,        // epoch timestamp
 }
 
@@ -148,7 +150,7 @@ impl Direct {
     }
 
     /// Generate tokens autoregressively. Returns generated token strings via callback.
-    fn generate<F>(&mut self, prompt_tokens: &[i64], max_new_tokens: usize, mut on_token: F)
+    fn generate<F>(&mut self, prompt_tokens: &[i64], max_new_tokens: usize, temperature: f32, mut on_token: F)
     where
         F: FnMut(String) -> bool, // Returns true to continue, false to stop
     {
@@ -193,16 +195,37 @@ impl Direct {
                 );
             }
 
-            // Convert f16 to f32 for argmax
+            // Convert f16 to f32
             let last_logits: Vec<f32> = last_logits_f16.iter().map(|x| x.to_f32()).collect();
 
-            // Greedy sampling: argmax
-            let next_token = last_logits
-                .iter()
-                .enumerate()
-                .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-                .map(|(idx, _)| idx as u32)
-                .unwrap();
+            let next_token = if temperature <= 0.0 {
+                // Greedy: argmax
+                last_logits
+                    .iter()
+                    .enumerate()
+                    .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                    .map(|(idx, _)| idx as u32)
+                    .unwrap()
+            } else {
+                // Temperature sampling with softmax
+                let max_logit = last_logits.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+                let mut probs: Vec<f32> = last_logits.iter().map(|&l| ((l - max_logit) / temperature).exp()).collect();
+                let sum: f32 = probs.iter().sum();
+                for p in probs.iter_mut() {
+                    *p /= sum;
+                }
+                let r: f32 = rand::thread_rng().r#gen();
+                let mut cumulative = 0.0;
+                let mut sampled = probs.len() as u32 - 1;
+                for (i, &p) in probs.iter().enumerate() {
+                    cumulative += p;
+                    if r < cumulative {
+                        sampled = i as u32;
+                        break;
+                    }
+                }
+                sampled
+            };
 
             // Check for EOS/EOT
             if next_token == EOS_TOKEN as u32 || next_token == EOT_TOKEN as u32 {
@@ -272,7 +295,7 @@ pub fn create<T: Clone + Send + 'static>(trt: &Arc<tensorrt::Tensorrt>, epoch: &
                 }
 
                 // Generate tokens
-                direct.generate(&prompt_tokens, max_tokens, |token_str| {
+                direct.generate(&prompt_tokens, max_tokens, input.temperature, |token_str| {
                     output_tx
                         .blocking_send(Output::Token {
                             payload: input.payload.clone(),
@@ -297,6 +320,32 @@ pub fn create<T: Clone + Send + 'static>(trt: &Arc<tensorrt::Tensorrt>, epoch: &
 impl<T: Clone + Send + 'static> Handle<T> {
     pub fn send(&self, input: Input<T>) {
         self.tx.send(input).unwrap();
+    }
+
+    pub async fn build_prompt(
+        &self,
+        identity: &str,
+        personality: &str,
+        tools: &str,
+        facts: &str,
+        history: &history::History,
+    ) -> String {
+        let (summary, history) = history.summarize(5).await;
+        let mut short_history = String::new();
+        for (role, message) in history.iter() {
+            let role = match role {
+                history::Role::Robot => "assistant",
+                history::Role::User(_) => "user", // TODO: process ID
+            };
+            short_history.push_str(&format!(
+                "<|start_header_id|>{}<|end_header_id|>\n\n{}<|eot_id|>",
+                role, message,
+            ));
+        }
+        format!(
+            "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{}\n{}\n{}\n{}\n{}<|eot_id|>{}<|start_header_id|>assistant<|end_header_id|>\n\n",
+            identity, personality, tools, facts, summary, short_history,
+        )
     }
 }
 

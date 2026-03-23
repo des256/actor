@@ -1,6 +1,6 @@
-"""Export Llama 3.2 3B to INT4 AWQ quantized ONNX with explicit KV cache.
+"""Export Llama 3.2 3B to INT8 quantized ONNX with explicit KV cache.
 
-Pipeline: source/ → FP16 ONNX → INT4 AWQ quantization → ckpt/model.onnx
+Pipeline: source/ → FP16 ONNX → INT8 quantization → ckpt/model.onnx
 
 Exports a single model with explicit KV cache I/O tensors for all 28 layers:
   - Inputs: input_ids, position_ids, past_key_values.{0..27}.{key,value}
@@ -108,25 +108,27 @@ def precompute_rope_cos_sin(dim, end, theta=10000.0, rope_scaling=None):
 
 
 def apply_rotary_emb(xq, xk, rope_cos, rope_sin):
-    """Apply rotary embeddings using real-valued cos/sin (no complex tensors)."""
+    """Apply rotary embeddings using Llama's half-rotation convention (rotate_half)."""
     # xq, xk: [batch, num_heads, seq_len, head_dim]
-    # rope_cos, rope_sin: [max_seq_len, head_dim//2]
+    # rope_cos, rope_sin: [seq_len, head_dim//2]
     seq_len = xq.shape[2]
     cos = rope_cos[:seq_len][None, None, :, :]  # [1, 1, seq_len, head_dim//2]
     sin = rope_sin[:seq_len][None, None, :, :]
 
-    # Split head_dim into pairs: (x0, x1), (x2, x3), ...
-    xq_r = xq.float().reshape(*xq.shape[:-1], -1, 2)  # [..., head_dim//2, 2]
-    xk_r = xk.float().reshape(*xk.shape[:-1], -1, 2)
+    # Split head_dim into two halves (Llama convention)
+    half = xq.shape[-1] // 2
+    xq_float = xq.float()
+    xk_float = xk.float()
+    xq1, xq2 = xq_float[..., :half], xq_float[..., half:]
+    xk1, xk2 = xk_float[..., :half], xk_float[..., half:]
 
-    xq0, xq1 = xq_r[..., 0], xq_r[..., 1]  # [..., head_dim//2]
-    xk0, xk1 = xk_r[..., 0], xk_r[..., 1]
+    # rotate_half: q_out = q * cos + rotate_half(q) * sin
+    #   q_out[:half] = q[:half] * cos - q[half:] * sin
+    #   q_out[half:] = q[half:] * cos + q[:half] * sin
+    xq_out = torch.cat([xq1 * cos - xq2 * sin, xq2 * cos + xq1 * sin], dim=-1)
+    xk_out = torch.cat([xk1 * cos - xk2 * sin, xk2 * cos + xk1 * sin], dim=-1)
 
-    # Apply rotation: (x0*cos - x1*sin, x0*sin + x1*cos)
-    xq_out = torch.stack([xq0 * cos - xq1 * sin, xq0 * sin + xq1 * cos], dim=-1)
-    xk_out = torch.stack([xk0 * cos - xk1 * sin, xk0 * sin + xk1 * cos], dim=-1)
-
-    return xq_out.flatten(-2).type_as(xq), xk_out.flatten(-2).type_as(xk)
+    return xq_out.type_as(xq), xk_out.type_as(xk)
 
 
 # ===== Llama3 Attention =====
@@ -189,10 +191,11 @@ class LlamaAttention(nn.Module):
         present_k = k
         present_v = v
 
-        # GQA: repeat KV heads to match Q heads
+        # GQA: repeat KV heads to match Q heads (expand+reshape, same as HF repeat_kv)
         num_repeats = self.num_heads // self.num_kv_heads
-        k = k.repeat_interleave(num_repeats, dim=1)
-        v = v.repeat_interleave(num_repeats, dim=1)
+        kv_len = k.shape[2]
+        k = k[:, :, None, :, :].expand(batch, self.num_kv_heads, num_repeats, kv_len, self.head_dim).reshape(batch, self.num_heads, kv_len, self.head_dim)
+        v = v[:, :, None, :, :].expand(batch, self.num_kv_heads, num_repeats, kv_len, self.head_dim).reshape(batch, self.num_heads, kv_len, self.head_dim)
 
         # Scaled dot-product attention
         scale = self.head_dim**-0.5
@@ -208,7 +211,7 @@ class LlamaAttention(nn.Module):
         mask = col_indices[None, :] > pos[:, None]  # [seq_len, total_len]
         attn_weights = attn_weights.masked_fill(mask[None, None, :, :], float("-inf"))
 
-        attn_weights = F.softmax(attn_weights, dim=-1)
+        attn_weights = F.softmax(attn_weights, dim=-1, dtype=torch.float32).to(q.dtype)
         attn_output = torch.matmul(attn_weights, v)
 
         # Reshape and project
@@ -526,10 +529,20 @@ class C4CalibrationDataReader:
 
     def get_next(self):
         if self.index >= len(self.inputs):
+            # Auto-rewind so the reader can be iterated multiple times
+            # (GEMV detection pass + calibration pass)
+            self.index = 0
             return None
         result = self.inputs[self.index]
         self.index += 1
         return result
+
+    def get_first(self):
+        assert len(self.inputs) > 0, "Calibration data list is empty!"
+        return self.inputs[0]
+
+    def rewind(self):
+        self.index = 0
 
     def __iter__(self):
         return iter(self.inputs)
@@ -538,10 +551,10 @@ class C4CalibrationDataReader:
         return len(self.inputs)
 
 
-def quantize_int4(onnx_path: Path):
-    """INT4 AWQ quantization using NVIDIA modelopt.
+def quantize_int8(onnx_path: Path):
+    """INT8 quantization using NVIDIA modelopt.
 
-    Reads the FP16 ONNX model from onnx_path, quantizes with AWQ,
+    Reads the FP16 ONNX model from onnx_path, quantizes to INT8,
     and overwrites it in place.
     """
     # onnx_graphsurgeon 0.5.8 references onnx.helper.float32_to_bfloat16,
@@ -553,57 +566,44 @@ def quantize_int4(onnx_path: Path):
             np.array(x, dtype=np.float32).view(np.uint32) >> 16
         ).astype(np.uint16)
 
-    # Monkey-patch modelopt's save_onnx before importing quantize
-    import modelopt.onnx.quantization.int4 as _int4_mod
+    # Monkey-patch modelopt's save_onnx before importing quantize.
+    # Must patch every module that does `from modelopt.onnx.utils import save_onnx`
+    # since that binds a local name unaffected by patching the source module.
+    import modelopt.onnx.quantization.graph_utils as _graph_utils_mod
+    import modelopt.onnx.quantization.int8 as _int8_mod
     import modelopt.onnx.utils as _modelopt_utils
 
     _modelopt_utils.save_onnx = _patched_save_onnx
-    _int4_mod.save_onnx = _patched_save_onnx
+    _int8_mod.save_onnx = _patched_save_onnx
+    _graph_utils_mod.save_onnx = _patched_save_onnx
 
-    from modelopt.onnx.quantization.int4 import quantize
+    from modelopt.onnx.quantization.int8 import quantize
 
-    # Calibration parameters — awq_clip runs inference on every sample for each
-    # quantizable weight, so keep this low. The clip search internally subsamples
-    # to max_tokens=64 anyway.
     num_calib_samples = 32
     calib_seq_len = 128
-    block_size = 128
 
     calib_reader = C4CalibrationDataReader(SOURCE_DIR, num_calib_samples, calib_seq_len)
 
-    print(f"\nQuantizing {onnx_path} with INT4 AWQ (block_size={block_size}) ...")
+    print(f"\nQuantizing {onnx_path} with INT8 ...")
     print("  Excluding: /lm_head (default)")
     print("  Calibration EP: CUDAExecutionProvider")
 
     quantized_model = quantize(
         str(onnx_path),
-        calibration_method="awq_clip",
+        calibration_method="entropy",
         calibration_data_reader=calib_reader,
         calibration_eps=["cuda", "cpu"],
         use_external_data_format=True,
-        block_size=block_size,
         nodes_to_exclude=[r"/lm_head"],
+        calibrate_per_node=True,
     )
-
-    # Upgrade opset to 21 if needed (INT4 DequantizeLinear requires opset >= 21)
-    current_opset = max(
-        o.version for o in quantized_model.opset_import if o.domain == ""
-    )
-    if current_opset < 21:
-        print(
-            f"Upgrading opset from {current_opset} to 21 (required for INT4 DQ nodes)"
-        )
-        for opset in quantized_model.opset_import:
-            if opset.domain == "":
-                opset.version = 21
 
     print(f"\nSaving quantized model to {onnx_path} ...")
     _patched_save_onnx(quantized_model, str(onnx_path), save_as_external_data=True)
 
-    print("\nINT4 AWQ quantization complete")
+    print("\nINT8 quantization complete")
     print(f"  Output: {onnx_path}")
 
 
 if __name__ == "__main__":
-    onnx_path = export_fp16()
-    quantize_int4(onnx_path)
+    export_fp16()

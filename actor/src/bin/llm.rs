@@ -5,30 +5,10 @@ use {
 
 #[tokio::main]
 async fn main() {
-    println!("select SLM:");
-    println!("1. Phi-3 (4B)");
-    println!("2. Llama 3 (3B)");
-    println!("3. Llama 3 (8B)");
-    println!("4. Gemma 3 (4B)");
-    println!("5. SmoLlm 3 (3B)");
-    print!("> ");
-    io::stdout().flush().unwrap();
-    let mut input = String::new();
-    io::stdin().read_line(&mut input).unwrap();
-    let choice = input.trim().parse::<usize>().unwrap();
-    let model = match choice {
-        1 => slm::Model::Phi3,
-        2 => slm::Model::Llama33b,
-        3 => slm::Model::Llama38b,
-        4 => slm::Model::Gemma34b,
-        5 => slm::Model::Smollm3,
-        _ => panic!("invalid choice"),
-    };
     println!("loading model...");
     let epoch = Arc::new(Epoch::new());
-    let onnx = onnx::Onnx::new(24);
-    let slm_core = Arc::new(slm::Core::new(&onnx, onnx::Executor::Cuda(0), model));
-    let (slm_handle, mut slm_listener) = slm::create::<()>(&slm_core, &epoch);
+    let tensorrt = tensorrt::Tensorrt::new();
+    let (llm_handle, mut llm_listener) = llama3::create::<()>(&tensorrt, &epoch);
     println!("model loaded. select persona:");
     println!("1. grumpy");
     println!("2. wise");
@@ -57,18 +37,18 @@ async fn main() {
         let mut input = String::new();
         io::stdin().read_line(&mut input).unwrap();
         history.add(history::Role::User(0), input.trim().to_string()).await;
-        let prompt = prompt::build_slm_main(model, identity, &personality, tools, facts, &history).await;
-        //println!("({})", prompt);
-        slm_handle.send(slm::Input {
+        let prompt = llm_handle.build_prompt(identity, &personality, tools, facts, &history).await;
+        llm_handle.send(llama3::Input {
             payload: (),
             prompt,
             stamp: epoch.current(),
-            max_tokens: 50,
+            max_tokens: 200,
+            temperature: 0.7,
         });
         let mut response = String::new();
         loop {
-            match slm_listener.recv().await {
-                slm::Output::Token {
+            match llm_listener.recv().await {
+                llama3::Output::Token {
                     payload: _,
                     token,
                     stamp,
@@ -80,7 +60,7 @@ async fn main() {
                     io::stdout().flush().unwrap();
                     response.push_str(&token);
                 }
-                slm::Output::Eos { payload: _, stamp } => {
+                llama3::Output::Eos { payload: _, stamp } => {
                     if !epoch.is_current(stamp) {
                         continue;
                     }
