@@ -75,12 +75,13 @@ if [ "$REBUILD" == true ] || [ ! -d "engine" ]; then
         --memPoolSize=workspace:512 \
         --fp16 \
         --builderOptimizationLevel=5
+    # flow_lm_flow runs WITHOUT fp16: TensorRT 10.3 on Jetson Orin produces
+    # incorrect latents with fp16, causing garbled audio and broken EOS detection.
     trtexec \
         --onnx="ckpt/flow_lm_flow_model.onnx" \
         --saveEngine="engine/flow_lm_flow.engine" \
         --timingCacheFile=engine/timing.cache \
         --memPoolSize=workspace:512 \
-        --fp16 \
         --builderOptimizationLevel=5
     # mimi decoder runs WITHOUT fp16: the stateful feedback loop compounds
     # fp16 rounding errors across frames, degrading audio quality.
